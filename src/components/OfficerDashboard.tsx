@@ -1,520 +1,577 @@
 import React, { useState } from 'react';
-import { WorkPermitApplication, User } from '../types';
-import { Briefcase, Search, Filter, CheckCircle2, XCircle, Clock, FileText, Eye, ShieldCheck, Download, AlertCircle, Sparkles, Building2, UserCircle, Calendar, Hash } from 'lucide-react';
-import confetti from 'canvas-confetti';
+import {
+  Search,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  FileText,
+  Eye,
+  ShieldCheck,
+  Download,
+  Building2,
+  UserCircle,
+  Inbox,
+  BadgeCheck,
+  FileCheck2,
+  Store,
+} from 'lucide-react';
+import { TradingLicenseApplication, User, ApplicationStatus } from '../types';
+import { STATUS_ORDER } from '../config/status';
+import { Button } from './ui/Button';
+import { Card, CardBody, CardHeader, CardTitle, SectionHeading } from './ui/Card';
+import { Badge, DataPoint, Eyebrow } from './ui/Badge';
+import { StatusBadge } from './ui/StatusBadge';
+import { Field, SearchInput, Textarea } from './ui/Field';
+import { Modal } from './ui/Modal';
+import { StatCard } from './ui/StatCard';
+import { EmptyState } from './ui/EmptyState';
+import { Table, THead, TBody, Th, Td, Tr, TableEmpty } from './ui/DataTable';
 
 interface OfficerDashboardProps {
   currentUser: User;
-  applications: WorkPermitApplication[];
+  applications: TradingLicenseApplication[];
+  section: string;
   onUpdateStatus: (
     appId: string,
     status: 'Under Review' | 'Approved' | 'Rejected',
     comments: string,
     officerName: string
   ) => void;
-  onOpenPermit: (app: WorkPermitApplication) => void;
+  onOpenLicense: (app: TradingLicenseApplication) => void;
 }
+
+type StatusFilter = 'ALL' | ApplicationStatus;
 
 export const OfficerDashboard: React.FC<OfficerDashboardProps> = ({
   currentUser,
   applications,
+  section,
   onUpdateStatus,
-  onOpenPermit,
+  onOpenLicense,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'Submitted' | 'Under Review' | 'Approved' | 'Rejected'>('ALL');
-  const [selectedApp, setSelectedApp] = useState<WorkPermitApplication | null>(null);
-
-  // Review Form State inside modal
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
+  const [selectedApp, setSelectedApp] = useState<TradingLicenseApplication | null>(null);
   const [officerComments, setOfficerComments] = useState('');
   const [activeDocPreview, setActiveDocPreview] = useState<string | null>(null);
 
-  // Filter applications
-  const filteredApps = applications.filter((app) => {
-    const matchesSearch =
-      app.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      app.referenceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      app.employerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      app.jobTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      app.idNumber.toLowerCase().includes(searchTerm.toLowerCase());
+  const matchesSearch = (app: TradingLicenseApplication) => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return true;
+    return [app.fullName, app.referenceNumber, app.tradeName, app.businessSector, app.tinNumber]
+      .join(' ')
+      .toLowerCase()
+      .includes(term);
+  };
 
-    const matchesStatus = statusFilter === 'ALL' || app.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  const queueApps = applications.filter(
+    (app) => matchesSearch(app) && (statusFilter === 'ALL' || app.status === statusFilter)
+  );
 
-  const pendingCount = applications.filter((a) => a.status === 'Submitted').length;
-  const underReviewCount = applications.filter((a) => a.status === 'Under Review').length;
-  const approvedCount = applications.filter((a) => a.status === 'Approved').length;
-  const rejectedCount = applications.filter((a) => a.status === 'Rejected').length;
+  const issuedApps = applications.filter(
+    (app) => app.status === 'Approved' && matchesSearch(app)
+  );
 
-  const handleOpenReview = (app: WorkPermitApplication) => {
+  const countOf = (status: ApplicationStatus) =>
+    applications.filter((a) => a.status === status).length;
+
+  const handleOpenReview = (app: TradingLicenseApplication) => {
     setSelectedApp(app);
-    setOfficerComments(app.officerComments || 'All supporting documents, credentials, and employer registration verified.');
+    setOfficerComments(
+      app.officerComments ||
+        'Trade name, TIN registration, and premises documents verified against the commercial register.'
+    );
     setActiveDocPreview(null);
   };
 
-  const handleApprove = () => {
+  const decide = (status: 'Under Review' | 'Approved' | 'Rejected', fallback: string) => {
     if (!selectedApp) return;
-
-    confetti({
-      particleCount: 70,
-      spread: 60,
-      origin: { y: 0.6 },
-    });
 
     onUpdateStatus(
       selectedApp.id,
-      'Approved',
-      officerComments || 'Approved following complete document and employer verification.',
-      currentUser.name || 'Officer Dawit Haile'
-    );
-    setSelectedApp(null);
-  };
-
-  const handleReject = () => {
-    if (!selectedApp) return;
-    onUpdateStatus(
-      selectedApp.id,
-      'Rejected',
-      officerComments || 'Application rejected due to incomplete credential certification or missing employer sponsorship proof.',
-      currentUser.name || 'Officer Dawit Haile'
-    );
-    setSelectedApp(null);
-  };
-
-  const handleSetUnderReview = () => {
-    if (!selectedApp) return;
-    onUpdateStatus(
-      selectedApp.id,
-      'Under Review',
-      officerComments || 'Application under active background verification with the Directorate.',
+      status,
+      officerComments || fallback,
       currentUser.name || 'Officer Dawit Haile'
     );
     setSelectedApp(null);
   };
 
   return (
-    <div className="space-y-6">
-      
-      {/* Officer Header Banner */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center space-x-2 mb-1">
-            <span className="px-2 py-0.5 text-[10px] font-bold uppercase bg-blue-50 text-blue-700 border border-blue-200 rounded">
-              Government Officer Portal
-            </span>
-            <span className="text-xs text-slate-500">
-              Badge: <span className="font-mono text-blue-700 font-bold">{currentUser.badgeNumber || 'OFF-8842-ETH'}</span>
-            </span>
-          </div>
-          <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
-            Work Permit Verification & Review Directorate
-          </h2>
-          <p className="text-xs sm:text-sm text-slate-600 max-w-2xl mt-1">
-            Review incoming citizen applications, inspect certified credentials, approve legitimate requests with digital seal generation, or provide constructive feedback.
-          </p>
-        </div>
-
-        <div className="flex items-center space-x-2 bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs">
-          <div>
-            <div className="text-[10px] text-slate-500 uppercase font-semibold">Active Reviewer</div>
-            <div className="font-bold text-slate-900">{currentUser.name}</div>
-            <div className="text-[10px] text-blue-700 font-medium">Authenticated Directorate Officer</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Metric Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        
-        <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-600 font-medium">Pending Review</span>
-            <FileText className="w-4 h-4 text-blue-600" />
-          </div>
-          <div className="text-2xl font-bold text-slate-900 font-mono mt-1">{pendingCount}</div>
-          <span className="text-[10px] text-slate-500">Requires initial inspection</span>
-        </div>
-
-        <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-600 font-medium">Under Review</span>
-            <Clock className="w-4 h-4 text-amber-600" />
-          </div>
-          <div className="text-2xl font-bold text-slate-900 font-mono mt-1">{underReviewCount}</div>
-          <span className="text-[10px] text-slate-500">In background check</span>
-        </div>
-
-        <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-600 font-medium">Approved Permits</span>
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-          </div>
-          <div className="text-2xl font-bold text-slate-900 font-mono mt-1">{approvedCount}</div>
-          <span className="text-[10px] text-slate-500">Permit PDFs dispatched</span>
-        </div>
-
-        <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-600 font-medium">Rejected</span>
-            <XCircle className="w-4 h-4 text-rose-600" />
-          </div>
-          <div className="text-2xl font-bold text-slate-900 font-mono mt-1">{rejectedCount}</div>
-          <span className="text-[10px] text-slate-500">Feedback returned</span>
-        </div>
-
-      </div>
-
-      {/* Filter and Search Bar */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col sm:flex-row gap-3 items-center justify-between shadow-xs">
-        
-        {/* Search Input */}
-        <div className="relative w-full sm:w-80">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search Ref, Applicant, Employer..."
-            className="w-full bg-white border border-slate-200 rounded-lg pl-9 pr-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
-          />
-        </div>
-
-        {/* Filter Pills */}
-        <div className="flex items-center space-x-1.5 overflow-x-auto w-full sm:w-auto text-xs">
-          {(['ALL', 'Submitted', 'Under Review', 'Approved', 'Rejected'] as const).map((st) => (
-            <button
-              key={st}
-              onClick={() => setStatusFilter(st)}
-              className={`px-3 py-1.5 rounded-lg font-medium whitespace-nowrap transition cursor-pointer ${
-                statusFilter === st
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'bg-slate-50 text-slate-600 hover:text-slate-900 border border-slate-200 hover:bg-slate-100'
-              }`}
-            >
-              {st === 'ALL' ? 'All Applications' : st}
-            </button>
-          ))}
-        </div>
-
-      </div>
-
-      {/* Applications Table */}
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
-        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
-          <h3 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
-            <Briefcase className="w-4 h-4 text-blue-600" />
-            <span>Applications Queue ({filteredApps.length})</span>
-          </h3>
-          <span className="text-xs text-slate-500">
-            Average turnaround: <span className="text-emerald-700 font-bold">2.4 days</span>
-          </span>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 text-slate-600 uppercase font-semibold text-[11px] tracking-wider border-b border-slate-200">
-              <tr>
-                <th className="px-4 py-3">Reference No.</th>
-                <th className="px-4 py-3">Applicant Name</th>
-                <th className="px-4 py-3">Employer & Role</th>
-                <th className="px-4 py-3">Submitted</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredApps.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="text-center py-10 text-slate-500">
-                    No applications found matching search or filter criteria.
-                  </td>
-                </tr>
-              ) : (
-                filteredApps.map((app) => (
-                  <tr key={app.id} className="hover:bg-slate-50/80 transition">
-                    <td className="px-4 py-3.5 font-mono font-bold text-blue-700">
-                      {app.referenceNumber}
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <div className="font-bold text-slate-900">{app.fullName}</div>
-                      <div className="text-[10px] text-slate-500 font-mono">{app.idType}: {app.idNumber}</div>
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <div className="font-semibold text-slate-800">{app.jobTitle}</div>
-                      <div className="text-[10px] text-slate-500">{app.employerName}</div>
-                    </td>
-                    <td className="px-4 py-3.5 text-slate-600">
-                      {app.submittedAt}
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <span
-                        className={`px-2.5 py-1 rounded-full text-[10px] font-bold inline-flex items-center space-x-1 border ${
-                          app.status === 'Approved'
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            : app.status === 'Under Review'
-                            ? 'bg-amber-50 text-amber-800 border-amber-200'
-                            : app.status === 'Rejected'
-                            ? 'bg-rose-50 text-rose-700 border-rose-200'
-                            : 'bg-blue-50 text-blue-700 border-blue-200'
-                        }`}
-                      >
-                        {app.status === 'Approved' && <CheckCircle2 className="w-3 h-3 text-emerald-600" />}
-                        {app.status === 'Under Review' && <Clock className="w-3 h-3 text-amber-600" />}
-                        {app.status === 'Rejected' && <XCircle className="w-3 h-3 text-rose-600" />}
-                        {app.status === 'Submitted' && <FileText className="w-3 h-3 text-blue-600" />}
-                        <span>{app.status}</span>
-                      </span>
-                    </td>
-                    <td className="px-4 py-3.5 text-right space-x-2">
-                      <button
-                        onClick={() => handleOpenReview(app)}
-                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold text-xs inline-flex items-center space-x-1 transition shadow-xs cursor-pointer"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                        <span>Review & Verify</span>
-                      </button>
-
-                      {app.status === 'Approved' && (
-                        <button
-                          onClick={() => onOpenPermit(app)}
-                          className="px-2.5 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-lg text-xs transition cursor-pointer"
-                          title="View Generated Certificate"
-                        >
-                          <Download className="w-3.5 h-3.5 text-blue-600" />
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* OFFICER APPLICATION REVIEW MODAL */}
-      {selectedApp && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-fade-in">
-          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden text-slate-800">
-            
-            {/* Modal Header */}
-            <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex items-center justify-between">
-              <div>
-                <div className="flex items-center space-x-2">
-                  <span className="text-[10px] font-mono uppercase bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-200 font-bold">
-                    Ref: {selectedApp.referenceNumber}
-                  </span>
-                  <span className="text-xs text-slate-500">
-                    Applicant: <strong className="text-slate-900">{selectedApp.fullName}</strong>
-                  </span>
-                </div>
-                <h3 className="text-lg font-bold text-slate-900 mt-1">
-                  Official Work Permit Verification & Decision Dossier
-                </h3>
-              </div>
-
-              <button
-                onClick={() => setSelectedApp(null)}
-                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition cursor-pointer"
-              >
-                <XCircle className="w-5 h-5" />
-              </button>
+    <div className="space-y-8">
+      {section === 'queue' && (
+        <>
+          {/* Heading */}
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <Eyebrow>Trade Registration &amp; Business Licensing</Eyebrow>
+              <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">
+                Review queue
+              </h2>
+              <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-slate-600">
+                Inspect registration records, record your findings, and either issue a sealed
+                trading licence or return the application with feedback.
+              </p>
             </div>
 
-            {/* Modal Body */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              
-              {/* Section 1: Summary Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                
-                {/* Applicant Details */}
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2 text-xs">
-                  <h4 className="font-bold text-slate-800 uppercase tracking-wider text-[11px] flex items-center space-x-1.5 border-b border-slate-200 pb-1.5">
-                    <UserCircle className="w-3.5 h-3.5 text-blue-600" />
-                    <span>Applicant Identification</span>
-                  </h4>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <span className="text-slate-500 block text-[10px]">Full Name</span>
-                      <span className="font-bold text-slate-900">{selectedApp.fullName}</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-500 block text-[10px]">Nationality</span>
-                      <span className="text-slate-800">{selectedApp.nationality}</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-500 block text-[10px]">DOB / Gender</span>
-                      <span className="text-slate-800">{selectedApp.dateOfBirth} ({selectedApp.gender})</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-500 block text-[10px]">{selectedApp.idType}</span>
-                      <span className="font-mono font-bold text-blue-700">{selectedApp.idNumber}</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-500 block text-[10px]">Phone</span>
-                      <span className="text-slate-800">{selectedApp.phone}</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-500 block text-[10px]">Email</span>
-                      <span className="text-slate-800 truncate block">{selectedApp.email}</span>
-                    </div>
-                  </div>
-                </div>
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-card">
+              <Eyebrow>Reviewing officer</Eyebrow>
+              <p className="mt-1.5 text-sm font-semibold text-slate-900">{currentUser.name}</p>
+              <p className="numeric mt-0.5 font-mono text-xs text-navy-700">
+                {currentUser.badgeNumber || 'OFF-8842-ETH'}
+              </p>
+            </div>
+          </div>
 
-                {/* Sponsoring Employer Details */}
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2 text-xs">
-                  <h4 className="font-bold text-slate-800 uppercase tracking-wider text-[11px] flex items-center space-x-1.5 border-b border-slate-200 pb-1.5">
-                    <Building2 className="w-3.5 h-3.5 text-blue-600" />
-                    <span>Sponsoring Employer & Contract</span>
-                  </h4>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <span className="text-slate-500 block text-[10px]">Employer Org</span>
-                      <span className="font-bold text-slate-900">{selectedApp.employerName}</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-500 block text-[10px]">Reg Number</span>
-                      <span className="font-mono text-slate-700">{selectedApp.employerRegistrationNo}</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-500 block text-[10px]">Designated Job Title</span>
-                      <span className="font-bold text-slate-900">{selectedApp.jobTitle}</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-500 block text-[10px]">Contract Duration</span>
-                      <span className="font-bold text-blue-700">{selectedApp.contractDurationMonths} Months</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-500 block text-[10px]">Work Location</span>
-                      <span className="text-slate-800">{selectedApp.workLocation}</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-500 block text-[10px]">Monthly Salary</span>
-                      <span className="font-mono text-slate-800">{selectedApp.monthlySalary.toLocaleString()} {selectedApp.salaryCurrency}</span>
-                    </div>
-                  </div>
-                </div>
+          {/* Metrics */}
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <StatCard
+              label="Pending review"
+              value={countOf('Submitted')}
+              hint="Awaiting first inspection"
+              icon={<FileText className="h-4 w-4" />}
+              tone="navy"
+            />
+            <StatCard
+              label="Under review"
+              value={countOf('Under Review')}
+              hint="Registry checks in progress"
+              icon={<Clock className="h-4 w-4" />}
+              tone="review"
+            />
+            <StatCard
+              label="Approved"
+              value={countOf('Approved')}
+              hint="Licences dispatched"
+              icon={<CheckCircle2 className="h-4 w-4" />}
+              tone="approved"
+            />
+            <StatCard
+              label="Rejected"
+              value={countOf('Rejected')}
+              hint="Feedback returned to applicant"
+              icon={<XCircle className="h-4 w-4" />}
+              tone="rejected"
+            />
+          </div>
 
-              </div>
+          {/* Toolbar + table */}
+          <Card>
+            <CardHeader className="gap-4">
+              <SearchInput
+                icon={<Search className="h-4 w-4" />}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search reference, owner, trade name…"
+                aria-label="Search applications"
+                className="w-full sm:w-80"
+              />
 
-              {/* Section 2: Supporting Documents Verification Checklist */}
-              <div className="space-y-3">
-                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center space-x-1.5">
-                  <ShieldCheck className="w-4 h-4 text-blue-600" />
-                  <span>Submitted Supporting Documents Verification</span>
-                </h4>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                  {selectedApp.documents.map((doc, idx) => (
-                    <div
-                      key={doc.id}
-                      className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-center justify-between hover:border-slate-300"
+              <div
+                className="flex flex-wrap items-center gap-1.5"
+                role="group"
+                aria-label="Filter by status"
+              >
+                {(['ALL', ...STATUS_ORDER] as StatusFilter[]).map((status) => {
+                  const isActive = statusFilter === status;
+                  return (
+                    <button
+                      key={status}
+                      type="button"
+                      aria-pressed={isActive}
+                      onClick={() => setStatusFilter(status)}
+                      className={`h-8 rounded-lg border px-3 text-sm font-medium transition-colors cursor-pointer ${
+                        isActive
+                          ? 'border-navy-700 bg-navy-700 text-white'
+                          : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                      }`}
                     >
-                      <div className="flex items-center space-x-2.5">
-                        <div className="w-7 h-7 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-700 font-bold text-xs">
-                          {idx + 1}
-                        </div>
-                        <div>
-                          <div className="font-bold text-slate-800 text-xs">{doc.title}</div>
-                          <div className="text-[10px] text-slate-500 font-mono truncate max-w-[160px]">
-                            {doc.fileName}
-                          </div>
-                        </div>
-                      </div>
+                      {status === 'ALL' ? 'All' : status}
+                    </button>
+                  );
+                })}
+              </div>
+            </CardHeader>
 
-                      <div className="flex items-center space-x-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setActiveDocPreview(doc.title)}
-                          className="px-2 py-1 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded text-[11px] font-medium transition cursor-pointer"
+            <Table>
+              <THead>
+                <tr>
+                  <Th>Reference</Th>
+                  <Th>Owner</Th>
+                  <Th>Business &amp; sector</Th>
+                  <Th>Submitted</Th>
+                  <Th>Status</Th>
+                  <Th align="right">Action</Th>
+                </tr>
+              </THead>
+              <TBody>
+                {queueApps.length === 0 ? (
+                  <TableEmpty colSpan={6}>
+                    No applications match this search or filter.
+                  </TableEmpty>
+                ) : (
+                  queueApps.map((app) => (
+                    <Tr key={app.id}>
+                      <Td className="numeric font-mono font-semibold text-navy-700">
+                        {app.referenceNumber}
+                      </Td>
+                      <Td>
+                        <div className="font-semibold text-slate-900">{app.fullName}</div>
+                        <div className="numeric mt-0.5 font-mono text-xs text-slate-500">
+                          {app.idType}: {app.idNumber}
+                        </div>
+                      </Td>
+                      <Td>
+                        <div className="font-medium text-slate-900">{app.tradeName}</div>
+                        <div className="mt-0.5 text-xs text-slate-500">{app.businessSector}</div>
+                      </Td>
+                      <Td className="whitespace-nowrap text-slate-600">{app.submittedAt}</Td>
+                      <Td>
+                        <StatusBadge status={app.status} size="sm" />
+                      </Td>
+                      <Td align="right">
+                        <div className="inline-flex items-center gap-2">
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            icon={<Eye className="h-3.5 w-3.5" />}
+                            onClick={() => handleOpenReview(app)}
+                          >
+                            Review
+                          </Button>
+                          {app.status === 'Approved' && (
+                            <Button
+                              size="sm"
+                              icon={<Download className="h-3.5 w-3.5" />}
+                              onClick={() => onOpenLicense(app)}
+                            >
+                              Licence
+                            </Button>
+                          )}
+                        </div>
+                      </Td>
+                    </Tr>
+                  ))
+                )}
+              </TBody>
+            </Table>
+
+            {queueApps.length > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-slate-50/60 px-6 py-3 text-sm text-slate-500">
+                <span>
+                  Showing{' '}
+                  <span className="numeric font-semibold text-slate-900">
+                    {queueApps.length}
+                  </span>{' '}
+                  of {applications.length}
+                </span>
+                <span>
+                  Average turnaround{' '}
+                  <span className="font-semibold text-approved-text">2.4 days</span>
+                </span>
+              </div>
+            )}
+          </Card>
+        </>
+      )}
+
+      {section === 'issued' && (
+        <>
+          <SectionHeading
+            title={`Issued licences (${issuedApps.length})`}
+            hint="Trading licences approved and sealed by the directorate"
+            actions={
+              <SearchInput
+                icon={<Search className="h-4 w-4" />}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search issued licences…"
+                aria-label="Search issued licences"
+                className="w-full sm:w-72"
+              />
+            }
+          />
+
+          {issuedApps.length === 0 ? (
+            <EmptyState
+              icon={<BadgeCheck className="h-6 w-6" />}
+              title="No licences issued yet"
+              description="Approve an application from the review queue and the sealed trading licence will be listed here."
+            />
+          ) : (
+            <Card>
+              <Table>
+                <THead>
+                  <tr>
+                    <Th>Licence number</Th>
+                    <Th>Owner</Th>
+                    <Th>Trade name</Th>
+                    <Th>Renewal due</Th>
+                    <Th align="right">Certificate</Th>
+                  </tr>
+                </THead>
+                <TBody>
+                  {issuedApps.map((app) => (
+                    <Tr key={app.id}>
+                      <Td className="numeric font-mono font-semibold text-navy-700">
+                        {app.licenseNumber ?? '—'}
+                      </Td>
+                      <Td>
+                        <div className="font-semibold text-slate-900">{app.fullName}</div>
+                        <div className="mt-0.5 text-xs text-slate-500">{app.businessSector}</div>
+                      </Td>
+                      <Td className="text-slate-600">{app.tradeName}</Td>
+                      <Td className="numeric whitespace-nowrap font-medium text-approved-text">
+                        {app.expiryDate ?? '—'}
+                      </Td>
+                      <Td align="right">
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          icon={<Download className="h-3.5 w-3.5" />}
+                          onClick={() => onOpenLicense(app)}
                         >
-                          Inspect
-                        </button>
-                        <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded text-[10px] font-bold border border-emerald-200">
-                          Verified
+                          Open
+                        </Button>
+                      </Td>
+                    </Tr>
+                  ))}
+                </TBody>
+              </Table>
+            </Card>
+          )}
+        </>
+      )}
+
+      {/* ---------------------------------------------------------------- */}
+      {/* Verification dossier                                             */}
+      {/* ---------------------------------------------------------------- */}
+      <Modal
+        open={Boolean(selectedApp)}
+        onClose={() => setSelectedApp(null)}
+        size="lg"
+        eyebrow={
+          selectedApp && (
+            <>
+              <Badge tone="navy" shape="tag" mono>
+                {selectedApp.referenceNumber}
+              </Badge>
+              <StatusBadge status={selectedApp.status} size="sm" />
+            </>
+          )
+        }
+        title={selectedApp ? `Verification dossier — ${selectedApp.fullName}` : ''}
+        subtitle="Confirm the record, then record your decision below."
+        footer={
+          <>
+            <Button
+              variant="danger"
+              icon={<XCircle className="h-4 w-4" />}
+              onClick={() =>
+                decide(
+                  'Rejected',
+                  'Application rejected due to incomplete registration documents or an unverified TIN or premises record.'
+                )
+              }
+            >
+              Reject
+            </Button>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                onClick={() =>
+                  decide(
+                    'Under Review',
+                    'Application under active verification with the commercial register and Ministry of Revenues.'
+                  )
+                }
+              >
+                Mark under review
+              </Button>
+              <Button
+                variant="primary"
+                icon={<ShieldCheck className="h-4 w-4" />}
+                onClick={() =>
+                  decide(
+                    'Approved',
+                    'Approved following complete trade name, TIN and premises verification.'
+                  )
+                }
+              >
+                Approve &amp; issue licence
+              </Button>
+            </div>
+          </>
+        }
+      >
+        {selectedApp && (
+          <div className="grid gap-6 lg:grid-cols-2">
+            {/* Left: the record */}
+            <div className="space-y-5">
+              <Card tone="inset">
+                <CardHeader className="border-slate-200 px-5 py-3">
+                  <CardTitle
+                    as="h3"
+                    icon={<UserCircle className="h-4 w-4 text-navy-600" />}
+                  >
+                    Owner identification
+                  </CardTitle>
+                </CardHeader>
+                <CardBody className="grid grid-cols-2 gap-5 px-5 py-4">
+                  <DataPoint label="Full name" value={selectedApp.fullName} />
+                  <DataPoint label="Nationality" value={selectedApp.nationality} />
+                  <DataPoint
+                    label="Date of birth"
+                    value={`${selectedApp.dateOfBirth} (${selectedApp.gender})`}
+                  />
+                  <DataPoint label={selectedApp.idType} value={selectedApp.idNumber} mono />
+                  <DataPoint label="Phone" value={selectedApp.phone} />
+                  <DataPoint label="Email" value={selectedApp.email} />
+                  <DataPoint
+                    label="Residential address"
+                    value={selectedApp.address}
+                    className="col-span-2"
+                  />
+                </CardBody>
+              </Card>
+
+              <Card tone="inset">
+                <CardHeader className="border-slate-200 px-5 py-3">
+                  <CardTitle as="h3" icon={<Store className="h-4 w-4 text-navy-600" />}>
+                    Business registration
+                  </CardTitle>
+                </CardHeader>
+                <CardBody className="grid grid-cols-2 gap-5 px-5 py-4">
+                  <DataPoint label="Trade name" value={selectedApp.tradeName} />
+                  <DataPoint
+                    label="Registration no."
+                    value={selectedApp.tradeNameRegistrationNo}
+                    mono
+                  />
+                  <DataPoint label="Business type" value={selectedApp.businessType} />
+                  <DataPoint label="TIN" value={selectedApp.tinNumber} mono />
+                  <DataPoint label="Sector" value={selectedApp.businessSector} />
+                  <DataPoint label="Sub-sector" value={selectedApp.businessSubSector} />
+                  <DataPoint
+                    label="Registered capital"
+                    value={`${selectedApp.capital.toLocaleString()} ${selectedApp.capitalCurrency}`}
+                    mono
+                  />
+                  <DataPoint label="Employees" value={selectedApp.employeeCount} mono />
+                  <div className="col-span-2">
+                    <Eyebrow>Trade activity</Eyebrow>
+                    <p className="mt-1 text-sm leading-relaxed text-slate-700">
+                      {selectedApp.businessActivity}
+                    </p>
+                  </div>
+                </CardBody>
+              </Card>
+
+              <Card tone="inset">
+                <CardHeader className="border-slate-200 px-5 py-3">
+                  <CardTitle as="h3" icon={<Building2 className="h-4 w-4 text-navy-600" />}>
+                    Trading premises
+                  </CardTitle>
+                </CardHeader>
+                <CardBody className="grid grid-cols-2 gap-5 px-5 py-4">
+                  <DataPoint label="Region" value={selectedApp.region} />
+                  <DataPoint label="Sub-city / town" value={selectedApp.subCity} />
+                  <DataPoint label="Woreda" value={selectedApp.woreda} mono />
+                  <DataPoint label="House number" value={selectedApp.houseNumber || '—'} mono />
+                  <DataPoint label="Tenure" value={selectedApp.premisesType} />
+                  <DataPoint
+                    label="Licence term"
+                    value={`${selectedApp.licenseTermYears} year(s)`}
+                  />
+                </CardBody>
+              </Card>
+            </div>
+
+            {/* Right: documents + decision */}
+            <div className="space-y-5">
+              <div>
+                <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-slate-700">
+                  <FileCheck2 className="h-4 w-4 text-navy-600" aria-hidden="true" />
+                  Documents ({selectedApp.documents.length})
+                </h3>
+
+                <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200">
+                  {selectedApp.documents.map((doc, index) => (
+                    <li
+                      key={doc.id}
+                      className="flex items-center justify-between gap-3 bg-white px-4 py-3"
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className="numeric flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-navy-50 text-xs font-semibold text-navy-700">
+                          {index + 1}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-medium text-slate-900">
+                            {doc.title}
+                          </span>
+                          <span className="block truncate font-mono text-xs text-slate-500">
+                            {doc.fileName}
+                          </span>
                         </span>
                       </div>
-                    </div>
+
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setActiveDocPreview(doc.title)}
+                      >
+                        Inspect
+                      </Button>
+                    </li>
                   ))}
-                </div>
+                </ul>
 
                 {activeDocPreview && (
-                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-800 flex items-center justify-between">
-                    <span>Inspecting certified document: <strong>{activeDocPreview}</strong> (Hash checksum verified against national repository).</span>
+                  <div className="mt-3 flex items-start justify-between gap-3 rounded-lg border border-navy-200 bg-navy-50 p-3.5">
+                    <p className="text-sm leading-relaxed text-navy-900">
+                      Inspecting <strong className="font-semibold">{activeDocPreview}</strong>.
+                      Checksum verified against the national repository.
+                    </p>
                     <button
+                      type="button"
                       onClick={() => setActiveDocPreview(null)}
-                      className="text-xs text-blue-600 hover:text-blue-900 font-semibold cursor-pointer"
+                      className="shrink-0 text-sm font-semibold text-navy-700 underline underline-offset-2 hover:text-navy-900 cursor-pointer"
                     >
-                      Close preview
+                      Close
                     </button>
                   </div>
                 )}
               </div>
 
-              {/* Section 3: Officer Review Notes & Remarks */}
-              <div className="space-y-2 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
-                <label className="block font-bold text-slate-700 uppercase text-[11px]">
-                  Officer Evaluation Remarks & Decision Notes *
-                </label>
-                <textarea
-                  rows={2}
-                  value={officerComments}
-                  onChange={(e) => setOfficerComments(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-slate-900 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
-                  placeholder="Enter official review feedback, verification results, or permit conditions..."
-                />
-                <p className="text-[10px] text-slate-500">
-                  These comments are archived permanently and delivered to the citizen via automated notification.
-                </p>
+              <div className="rounded-xl border border-slate-200 bg-white p-5">
+                <Field
+                  label="Evaluation remarks"
+                  required
+                  hint="Archived permanently and delivered to the applicant by email."
+                >
+                  {(p) => (
+                    <Textarea
+                      {...p}
+                      rows={5}
+                      value={officerComments}
+                      onChange={(e) => setOfficerComments(e.target.value)}
+                      placeholder="Record verification results, or the reason the application cannot proceed."
+                    />
+                  )}
+                </Field>
               </div>
-
             </div>
-
-            {/* Modal Actions Footer */}
-            <div className="bg-slate-50 px-6 py-4 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
-              
-              <div className="flex items-center space-x-2">
-                <button
-                  type="button"
-                  onClick={handleSetUnderReview}
-                  className="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-xs font-semibold transition cursor-pointer"
-                >
-                  Mark as Under Review
-                </button>
-                <button
-                  type="button"
-                  onClick={handleReject}
-                  className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 rounded-lg text-xs font-semibold transition cursor-pointer"
-                >
-                  Reject with Feedback
-                </button>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <button
-                  type="button"
-                  onClick={() => setSelectedApp(null)}
-                  className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-semibold transition cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleApprove}
-                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-xs transition flex items-center space-x-2 cursor-pointer"
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Approve & Issue Official Work Permit</span>
-                </button>
-              </div>
-
-            </div>
-
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
 
+      {/* Queue is empty overall (not just filtered) */}
+      {section === 'queue' && applications.length === 0 && (
+        <EmptyState
+          icon={<Inbox className="h-6 w-6" />}
+          title="The queue is clear"
+          description="No applications are waiting for review."
+        />
+      )}
     </div>
   );
 };

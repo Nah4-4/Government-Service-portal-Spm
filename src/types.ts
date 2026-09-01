@@ -2,6 +2,18 @@ export type UserRole = 'applicant' | 'officer' | 'admin';
 
 export type ApplicationStatus = 'Submitted' | 'Under Review' | 'Approved' | 'Rejected';
 
+/** Legal forms recognised by the Ethiopian Commercial Code for business registration. */
+export type BusinessType =
+  | 'Sole Proprietorship'
+  | 'Private Limited Company (PLC)'
+  | 'Share Company (S.C.)'
+  | 'General Partnership'
+  | 'Cooperative Society'
+  | 'Branch of Foreign Company';
+
+/** How the applicant holds the trading premises declared on the licence. */
+export type PremisesType = 'Owned' | 'Rented / Leased' | 'Shared' | 'Home-based / Virtual';
+
 export interface User {
   id: string;
   name: string;
@@ -15,7 +27,13 @@ export interface User {
 
 export interface UploadedDoc {
   id: string;
-  type: 'photo' | 'passport' | 'offer_letter' | 'medical_cert' | 'qualification';
+  type:
+    | 'owner_photo'
+    | 'owner_id'
+    | 'trade_name_certificate'
+    | 'tin_certificate'
+    | 'lease_agreement'
+    | 'competency_certificate';
   title: string;
   fileName: string;
   fileSize: string;
@@ -24,52 +42,63 @@ export interface UploadedDoc {
   previewUrl?: string;
 }
 
-export interface WorkPermitApplication {
+export interface TradingLicenseApplication {
   id: string;
-  referenceNumber: string; // e.g. WP-2026-84920
+  referenceNumber: string; // e.g. TL-2026-ETH-9481
   applicantId: string;
-  
-  // 1. Personal Information
+
+  // 1. Owner / Applicant Information
   fullName: string;
   dateOfBirth: string;
-  gender: 'Male' | 'Female' | 'Other';
+  gender: 'Male' | 'Female' ;
   nationality: string;
   address: string;
   phone: string;
   email: string;
-  
+
   // 2. Identification
-  idType: 'National ID' | 'Passport';
+  idType: 'Fayda National ID' | 'Kebele ID' | 'Passport';
   idNumber: string;
   idExpiryDate: string;
-  issuingCountry: string;
+  issuingAuthority: string; // issuing region, or country for passports
 
-  // 3. Employment Details
-  employerName: string;
-  employerRegistrationNo: string;
-  jobTitle: string;
-  jobCategory: string;
-  jobDescription: string;
-  workLocation: string;
-  contractDurationMonths: number;
-  monthlySalary: number;
-  salaryCurrency: string;
-  startDate: string;
+  // 3. Business Details
+  tradeName: string;
+  tradeNameRegistrationNo: string;
+  businessType: BusinessType;
+  tinNumber: string; // 10-digit Taxpayer Identification Number
+  businessSector: string;
+  businessSubSector: string;
+  businessActivity: string; // narrative scope of trade
 
-  // 4. Documents
+  // 4. Trading Premises
+  region: string;
+  subCity: string;
+  woreda: string;
+  houseNumber: string;
+  premisesType: PremisesType;
+
+  // 5. Capital & Operations
+  capital: number; // registered capital
+  capitalCurrency: string; // ETB
+  employeeCount: number;
+  commencementDate: string;
+  licenseTermYears: number; // renewal cycle, usually one Ethiopian fiscal year
+
+  // 6. Documents
   documents: UploadedDoc[];
   declarationAccepted: boolean;
 
-  // 5. Workflow & Status
+  // 7. Workflow & Status
   status: ApplicationStatus;
   submittedAt: string;
   updatedAt: string;
   assignedOfficerName?: string;
   officerComments?: string;
   rejectionReason?: string;
-  
-  // 6. Approved Permit Details
-  permitNumber?: string; // e.g. ETH-WP-2026-09214
+
+  // 8. Issued Licence Details
+  licenseNumber?: string; // e.g. ET/AA/TL/2026/09214
   issueDate?: string;
   expiryDate?: string;
   verificationCode?: string;

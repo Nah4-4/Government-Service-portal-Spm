@@ -1,20 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { User, WorkPermitApplication, SystemNotification } from './types';
+import { PlusCircle } from 'lucide-react';
+import { User, TradingLicenseApplication, SystemNotification } from './types';
 import { INITIAL_USERS, INITIAL_APPLICATIONS, INITIAL_NOTIFICATIONS } from './data/initialData';
-import { Header } from './components/Header';
+import { DEFAULT_SECTION } from './config/navigation';
+import { AppShell } from './components/AppShell';
 import { ApplicantView } from './components/ApplicantView';
 import { OfficerDashboard } from './components/OfficerDashboard';
 import { AdminPanel } from './components/AdminPanel';
 import { ProjectCharterModal } from './components/ProjectCharterModal';
 import { NotificationsDrawer } from './components/NotificationsDrawer';
-import { WorkPermitModal } from './components/WorkPermitModal';
-import { ShieldCheck, GraduationCap, ArrowRight } from 'lucide-react';
+import { TradingLicenseModal } from './components/TradingLicenseModal';
 
 export default function App() {
   // Users state
   const [users] = useState<User[]>(INITIAL_USERS);
   const [currentUser, setCurrentUser] = useState<User>(() => {
-    const saved = localStorage.getItem('gov_spm_current_user');
+    const saved = localStorage.getItem('gov_tl_current_user_v4');
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -22,12 +23,12 @@ export default function App() {
         // fallback
       }
     }
-    return INITIAL_USERS[0]; // Citizen Abebe Kebede
+    return INITIAL_USERS[0]; // Eyob Derebay Yemer
   });
 
   // Applications state
-  const [applications, setApplications] = useState<WorkPermitApplication[]>(() => {
-    const saved = localStorage.getItem('gov_spm_applications');
+  const [applications, setApplications] = useState<TradingLicenseApplication[]>(() => {
+    const saved = localStorage.getItem('gov_tl_applications_v4');
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -40,7 +41,7 @@ export default function App() {
 
   // Notifications state
   const [notifications, setNotifications] = useState<SystemNotification[]>(() => {
-    const saved = localStorage.getItem('gov_spm_notifications');
+    const saved = localStorage.getItem('gov_tl_notifications_v4');
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -51,49 +52,54 @@ export default function App() {
     return INITIAL_NOTIFICATIONS;
   });
 
+  // Active sidebar section for the current role
+  const [activeSection, setActiveSection] = useState<string>(
+    () => DEFAULT_SECTION[currentUser.role]
+  );
+
   // Modal States
   const [isCharterOpen, setIsCharterOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  const [activePermitApp, setActivePermitApp] = useState<WorkPermitApplication | null>(null);
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
+  const [activeLicenseApp, setActiveLicenseApp] = useState<TradingLicenseApplication | null>(null);
 
   // Sync to local storage
   useEffect(() => {
-    localStorage.setItem('gov_spm_current_user', JSON.stringify(currentUser));
+    localStorage.setItem('gov_tl_current_user_v4', JSON.stringify(currentUser));
   }, [currentUser]);
 
   useEffect(() => {
-    localStorage.setItem('gov_spm_applications', JSON.stringify(applications));
+    localStorage.setItem('gov_tl_applications_v4', JSON.stringify(applications));
   }, [applications]);
 
   useEffect(() => {
-    localStorage.setItem('gov_spm_notifications', JSON.stringify(notifications));
+    localStorage.setItem('gov_tl_notifications_v4', JSON.stringify(notifications));
   }, [notifications]);
 
-  // Unread notifications count
-  const unreadCount = notifications.filter((n) => !n.isRead).length;
-
-  // Handler: Switch User Role
+  // Handler: Switch User Role — sections are per-role, so reset to the default
   const handleSelectUser = (user: User) => {
     setCurrentUser(user);
+    setActiveSection(DEFAULT_SECTION[user.role]);
+    setIsWizardOpen(false);
   };
 
   // Handler: Role Selection Demo from Charter Guide
   const handleSelectRoleDemo = (role: 'applicant' | 'officer' | 'admin') => {
     const targetUser = users.find((u) => u.role === role);
     if (targetUser) {
-      setCurrentUser(targetUser);
+      handleSelectUser(targetUser);
     }
   };
 
   // Handler: Submit New Application
   const handleSubmitApplication = (
-    newAppData: Omit<WorkPermitApplication, 'id' | 'referenceNumber' | 'status' | 'submittedAt' | 'updatedAt'>
+    newAppData: Omit<TradingLicenseApplication, 'id' | 'referenceNumber' | 'status' | 'submittedAt' | 'updatedAt'>
   ) => {
-    const refNumber = `WP-2026-ETH-${Math.floor(1000 + Math.random() * 9000)}`;
+    const refNumber = `TL-2026-ETH-${Math.floor(1000 + Math.random() * 9000)}`;
     const now = new Date();
     const formattedDate = `${now.toISOString().split('T')[0]} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 
-    const newApp: WorkPermitApplication = {
+    const newApp: TradingLicenseApplication = {
       ...newAppData,
       id: `app-${Date.now()}`,
       referenceNumber: refNumber,
@@ -113,7 +119,7 @@ export default function App() {
       recipientPhone: newApp.phone,
       type: 'EMAIL',
       title: `Application Received (Ref: ${refNumber})`,
-      message: `Your online work permit application for "${newApp.jobTitle}" at "${newApp.employerName}" has been successfully submitted with Reference Code: ${refNumber}. It is now in the review queue.`,
+      message: `Your online trading licence application for "${newApp.tradeName}" (${newApp.businessSector}) has been successfully submitted with Reference Code: ${refNumber}. It is now in the review queue.`,
       timestamp: formattedDate,
       relatedRef: refNumber,
       isRead: false,
@@ -125,13 +131,16 @@ export default function App() {
       recipientPhone: newApp.phone,
       type: 'SMS',
       title: 'GovPortal: Application Received',
-      message: `GovPortal: Application ${refNumber} received. Directorate review underway. Tracking available at portal.gov.et`,
+      message: `GovPortal: Application ${refNumber} received. Trade directorate review underway. Tracking available at portal.gov.et`,
       timestamp: formattedDate,
       relatedRef: refNumber,
       isRead: false,
     };
 
     setNotifications((prev) => [newEmailNotif, newSMSNotif, ...prev]);
+
+    // Land the citizen on the list so the new record is visible
+    setActiveSection('applications');
   };
 
   // Handler: Officer Review & Status Update
@@ -148,7 +157,7 @@ export default function App() {
       prev.map((app) => {
         if (app.id !== appId) return app;
 
-        const updated: WorkPermitApplication = {
+        const updated: TradingLicenseApplication = {
           ...app,
           status,
           officerComments: comments,
@@ -157,15 +166,15 @@ export default function App() {
         };
 
         if (status === 'Approved') {
-          const permitSerial = `ETH-WP-2026-${Math.floor(10000 + Math.random() * 90000)}`;
+          const licenseSerial = `ET/AA/TL/2026/${Math.floor(10000 + Math.random() * 90000)}`;
           const issueDate = now.toISOString().split('T')[0];
           const expiryDate = new Date(
-            Date.now() + 365 * 24 * 60 * 60 * 1000 * (app.contractDurationMonths ? app.contractDurationMonths / 12 : 2)
+            Date.now() + 365 * 24 * 60 * 60 * 1000 * (app.licenseTermYears || 1)
           )
             .toISOString()
             .split('T')[0];
 
-          updated.permitNumber = permitSerial;
+          updated.licenseNumber = licenseSerial;
           updated.issueDate = issueDate;
           updated.expiryDate = expiryDate;
           updated.verificationCode = `VRF-${app.referenceNumber.slice(-4)}-OK${Math.floor(10 + Math.random() * 89)}-GOV`;
@@ -177,8 +186,8 @@ export default function App() {
             recipientEmail: app.email,
             recipientPhone: app.phone,
             type: 'EMAIL',
-            title: `Work Permit APPROVED (Ref: ${app.referenceNumber})`,
-            message: `Congratulations! Your Work Permit Application (${app.referenceNumber}) has been APPROVED by ${officerName}. Official Permit Number: ${permitSerial}. Download your certified PDF from the portal.`,
+            title: `Trading Licence APPROVED (Ref: ${app.referenceNumber})`,
+            message: `Congratulations! Your Trading Licence application (${app.referenceNumber}) has been APPROVED by ${officerName}. Official Licence Number: ${licenseSerial}. Download your certified PDF from the portal.`,
             timestamp: formattedDate,
             relatedRef: app.referenceNumber,
             isRead: false,
@@ -189,8 +198,8 @@ export default function App() {
             recipientEmail: app.email,
             recipientPhone: app.phone,
             type: 'SMS',
-            title: 'GovPortal: Permit Approved',
-            message: `GovPortal: Work Permit ${permitSerial} APPROVED. Official electronic certificate is ready for download.`,
+            title: 'GovPortal: Licence Approved',
+            message: `GovPortal: Trading Licence ${licenseSerial} APPROVED. Official electronic certificate is ready for download.`,
             timestamp: formattedDate,
             relatedRef: app.referenceNumber,
             isRead: false,
@@ -204,7 +213,7 @@ export default function App() {
             recipientPhone: app.phone,
             type: 'EMAIL',
             title: `Application Decision Update (Ref: ${app.referenceNumber})`,
-            message: `Your work permit application (${app.referenceNumber}) was reviewed by ${officerName} and could not be approved at this time. Reason: "${comments}".`,
+            message: `Your trading licence application (${app.referenceNumber}) was reviewed by ${officerName} and could not be approved at this time. Reason: "${comments}".`,
             timestamp: formattedDate,
             relatedRef: app.referenceNumber,
             isRead: false,
@@ -218,7 +227,7 @@ export default function App() {
             recipientPhone: app.phone,
             type: 'EMAIL',
             title: `Status: Under Active Review (Ref: ${app.referenceNumber})`,
-            message: `Your application (${app.referenceNumber}) has been moved to Under Review status. ${officerName} is actively verifying your credentials.`,
+            message: `Your application (${app.referenceNumber}) has been moved to Under Review status. ${officerName} is actively verifying your trade name, TIN and premises records.`,
             timestamp: formattedDate,
             relatedRef: app.referenceNumber,
             isRead: false,
@@ -232,109 +241,99 @@ export default function App() {
     );
   };
 
-  // Handler: Send Email Copy of Permit
+  // Handler: Send Email Copy of Licence
   const handleSendEmailCopy = (email: string) => {
     const notif: SystemNotification = {
       id: `notif-${Date.now()}-email`,
       recipientEmail: email,
       recipientPhone: currentUser.phone,
       type: 'EMAIL',
-      title: 'Official Work Permit Certificate PDF Copy',
-      message: `A digital copy of your official approved work permit certificate has been dispatched to ${email}.`,
+      title: 'Official Business Trading Licence PDF Copy',
+      message: `A digital copy of your official approved business trading licence has been dispatched to ${email}.`,
       timestamp: 'Just now',
-      relatedRef: activePermitApp?.referenceNumber || 'WP-2026',
+      relatedRef: activeLicenseApp?.referenceNumber || 'TL-2026',
       isRead: false,
     };
     setNotifications((prev) => [notif, ...prev]);
   };
 
+  // Applications visible to the signed-in citizen (strictly their own applications)
+  const applicantApplications = applications.filter(
+    (a) => a.applicantId === currentUser.id
+  );
+
+  // Notifications visible to the current user (citizens only see their own notices; officers/admins see system logs)
+  const userNotifications =
+    currentUser.role === 'applicant'
+      ? notifications.filter(
+          (n) =>
+            n.recipientEmail?.toLowerCase() === currentUser.email.toLowerCase() ||
+            (currentUser.phone && n.recipientPhone === currentUser.phone) ||
+            applicantApplications.some((app) => app.referenceNumber === n.relatedRef)
+        )
+      : notifications;
+
+  const unreadCount = userNotifications.filter((n) => !n.isRead).length;
+
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col selection:bg-blue-600 selection:text-white">
-      
-      {/* Top Main Navigation */}
-      <Header
+    <>
+      <AppShell
         currentUser={currentUser}
         allUsers={users}
         onSelectUser={handleSelectUser}
+        activeSection={activeSection}
+        onSelectSection={setActiveSection}
         onOpenCharter={() => setIsCharterOpen(true)}
         onOpenNotifications={() => setIsNotificationsOpen(true)}
         unreadCount={unreadCount}
-      />
-
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        
-        {/* Quick SPM Class Presentation Banner */}
-        <div className="mb-6 bg-white border border-slate-200/80 rounded-xl p-3.5 px-4 sm:px-5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-xs">
-          <div className="flex items-center space-x-2 text-xs">
-            <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
-            <span className="text-blue-700 font-bold uppercase tracking-wide text-[11px]">SPM Class Demo Mode:</span>
-            <span className="text-slate-600 font-medium">
-              Waterfall SDLC (5 Weeks) • 45,100 Birr Budget • Target &ge;95% UAT Sign-off
-            </span>
-          </div>
-          <button
-            onClick={() => setIsCharterOpen(true)}
-            className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center space-x-1 underline cursor-pointer"
-          >
-            <span>Open SPM Project Charter & Demo Guide</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
-
-        {/* Dynamic View based on Active Role */}
+        primaryAction={
+          currentUser.role === 'applicant'
+            ? {
+                label: 'New application',
+                icon: <PlusCircle className="h-4 w-4" aria-hidden="true" />,
+                onClick: () => setIsWizardOpen(true),
+              }
+            : undefined
+        }
+      >
         {currentUser.role === 'applicant' && (
           <ApplicantView
+            key={currentUser.id}
             currentUser={currentUser}
-            applications={applications.filter(
-              (a) => a.applicantId === currentUser.id || currentUser.id === 'user-applicant-1' || currentUser.id === 'user-applicant-2'
-            )}
+            applications={applicantApplications}
+            section={activeSection}
+            isWizardOpen={isWizardOpen}
+            onOpenWizard={() => setIsWizardOpen(true)}
+            onCloseWizard={() => setIsWizardOpen(false)}
             onSubmitApplication={handleSubmitApplication}
-            onOpenPermit={(app) => setActivePermitApp(app)}
+            onOpenLicense={(app) => setActiveLicenseApp(app)}
+            onNavigate={setActiveSection}
           />
         )}
 
         {currentUser.role === 'officer' && (
           <OfficerDashboard
+            key={currentUser.id}
             currentUser={currentUser}
             applications={applications}
+            section={activeSection}
             onUpdateStatus={handleUpdateStatus}
-            onOpenPermit={(app) => setActivePermitApp(app)}
+            onOpenLicense={(app) => setActiveLicenseApp(app)}
           />
         )}
 
         {currentUser.role === 'admin' && (
           <AdminPanel
-            currentUser={currentUser}
+            key={currentUser.id}
             applications={applications}
             users={users}
-            onOpenPermit={(app) => setActivePermitApp(app)}
+            section={activeSection}
+            onOpenLicense={(app) => setActiveLicenseApp(app)}
           />
         )}
+      </AppShell>
 
-      </main>
-
-      {/* Footer */}
-      <footer className="bg-white border-t border-slate-200 py-6 text-xs text-slate-500">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center space-x-2">
-            <ShieldCheck className="w-4 h-4 text-blue-600" />
-            <span className="font-medium text-slate-700">Federal Democratic Republic of Ethiopia • Directorate of Foreign Employment</span>
-          </div>
-          <div className="flex items-center space-x-4">
-            <button
-              onClick={() => setIsCharterOpen(true)}
-              className="text-blue-600 hover:text-blue-700 cursor-pointer font-medium hover:underline"
-            >
-              SPM Project Charter (Waterfall SDLC)
-            </button>
-            <span>•</span>
-            <span className="text-slate-400">Release 1.0 (5-Week Lifecycle)</span>
-          </div>
-        </div>
-      </footer>
-
-      {/* SPM Project Charter Modal */}
+      {/* SPM Project Charter */}
       <ProjectCharterModal
         isOpen={isCharterOpen}
         onClose={() => setIsCharterOpen(false)}
@@ -345,21 +344,30 @@ export default function App() {
       <NotificationsDrawer
         isOpen={isNotificationsOpen}
         onClose={() => setIsNotificationsOpen(false)}
-        notifications={notifications}
+        notifications={userNotifications}
         onMarkAllAsRead={() =>
-          setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })))
+          setNotifications((prev) =>
+            prev.map((n) =>
+              userNotifications.some((un) => un.id === n.id)
+                ? { ...n, isRead: true }
+                : n
+            )
+          )
         }
-        onClearAll={() => setNotifications([])}
+        onClearAll={() =>
+          setNotifications((prev) =>
+            prev.filter((n) => !userNotifications.some((un) => un.id === n.id))
+          )
+        }
       />
 
-      {/* Official Approved Work Permit Certificate Modal */}
-      <WorkPermitModal
-        application={activePermitApp}
-        isOpen={!!activePermitApp}
-        onClose={() => setActivePermitApp(null)}
+      {/* Official Approved Business Trading Licence */}
+      <TradingLicenseModal
+        application={activeLicenseApp}
+        isOpen={!!activeLicenseApp}
+        onClose={() => setActiveLicenseApp(null)}
         onSendEmailCopy={handleSendEmailCopy}
       />
-
-    </div>
+    </>
   );
 }

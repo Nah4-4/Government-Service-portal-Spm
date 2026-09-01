@@ -1,37 +1,65 @@
 import React, { useState } from 'react';
-import { WorkPermitApplication, User, SPMPhase, BudgetCategory } from '../types';
+import {
+  Users,
+  FileCheck,
+  CheckCircle2,
+  Download,
+  CalendarRange,
+  Coins,
+  Gauge,
+  Timer,
+  TrendingDown,
+} from 'lucide-react';
+import { TradingLicenseApplication, User } from '../types';
 import { SPM_PROJECT_INFO } from '../data/initialData';
-import { Building2, Users, FileCheck, CheckCircle2, AlertCircle, Clock, ShieldCheck, Download, Award, Calendar, Coins, TrendingUp, BarChart2 } from 'lucide-react';
+import { STATUS_META, STATUS_ORDER } from '../config/status';
+import { ROLE_LABEL } from '../config/navigation';
+import { Button } from './ui/Button';
+import { Card, CardBody, CardHeader, CardTitle, SectionHeading } from './ui/Card';
+import { Badge, Eyebrow } from './ui/Badge';
+import { StatusBadge } from './ui/StatusBadge';
+import { StatCard, Meter } from './ui/StatCard';
+import { Table, THead, TBody, Th, Td, Tr, TableEmpty } from './ui/DataTable';
 
 interface AdminPanelProps {
-  currentUser: User;
-  applications: WorkPermitApplication[];
+  applications: TradingLicenseApplication[];
   users: User[];
-  onOpenPermit: (app: WorkPermitApplication) => void;
+  section: string;
+  onOpenLicense: (app: TradingLicenseApplication) => void;
 }
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({
-  currentUser,
   applications,
   users,
-  onOpenPermit,
+  section,
+  onOpenLicense,
 }) => {
-  const [activeTab, setActiveTab] = useState<'metrics' | 'spmWaterfall' | 'budget' | 'users'>('metrics');
   const [exportSuccess, setExportSuccess] = useState(false);
 
   const totalApps = applications.length;
   const approvedCount = applications.filter((a) => a.status === 'Approved').length;
-  const underReviewCount = applications.filter((a) => a.status === 'Under Review').length;
-  const submittedCount = applications.filter((a) => a.status === 'Submitted').length;
-  const rejectedCount = applications.filter((a) => a.status === 'Rejected').length;
   const approvalRate = totalApps > 0 ? Math.round((approvedCount / totalApps) * 100) : 0;
 
+  const plannedTotal = SPM_PROJECT_INFO.budgetCategories.reduce(
+    (sum, b) => sum + b.plannedAmount,
+    0
+  );
+  const actualTotal = SPM_PROJECT_INFO.budgetCategories.reduce(
+    (sum, b) => sum + b.actualAmount,
+    0
+  );
+  const variance = plannedTotal - actualTotal;
+  const maxBudgetRow = Math.max(
+    ...SPM_PROJECT_INFO.budgetCategories.map((b) => Math.max(b.plannedAmount, b.actualAmount))
+  );
+
   const handleExportCSV = () => {
-    const headers = 'ReferenceNumber,ApplicantName,Email,Employer,JobTitle,Status,SubmittedAt,PermitNumber\n';
+    const headers =
+      'ReferenceNumber,OwnerName,Email,TradeName,TIN,BusinessType,Sector,Region,SubCity,Capital,Status,SubmittedAt,LicenseNumber\n';
     const rows = applications
       .map(
         (a) =>
-          `"${a.referenceNumber}","${a.fullName}","${a.email}","${a.employerName}","${a.jobTitle}","${a.status}","${a.submittedAt}","${a.permitNumber || 'N/A'}"`
+          `"${a.referenceNumber}","${a.fullName}","${a.email}","${a.tradeName}","${a.tinNumber}","${a.businessType}","${a.businessSector}","${a.region}","${a.subCity}","${a.capital}","${a.status}","${a.submittedAt}","${a.licenseNumber || 'N/A'}"`
       )
       .join('\n');
 
@@ -39,373 +67,427 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `SPM_WorkPermit_Summary_Report_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute(
+      'download',
+      `SPM_TradingLicence_Summary_Report_${new Date().toISOString().split('T')[0]}.csv`
+    );
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
 
     setExportSuccess(true);
     setTimeout(() => setExportSuccess(false), 3000);
   };
 
   return (
-    <div className="space-y-6">
-      
-      {/* Admin Executive Header */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center space-x-2 mb-1">
-            <span className="px-2 py-0.5 text-[10px] font-bold uppercase bg-blue-50 text-blue-700 border border-blue-200 rounded">
-              Administrator & SPM Ops
-            </span>
-            <span className="text-xs text-slate-500">
-              Lead: <strong className="text-slate-900">{currentUser.name}</strong>
-            </span>
-          </div>
-          <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
-            System Administration & SPM Project Controls
-          </h2>
-          <p className="text-xs sm:text-sm text-slate-600 max-w-2xl mt-1">
-            Executive oversight, Waterfall SDLC stage completion status, 45,100 Birr budget tracking, user role assignments, and real-time permit lifecycle throughput.
-          </p>
-        </div>
-
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={handleExportCSV}
-            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold flex items-center space-x-2 shadow-xs transition cursor-pointer"
-          >
-            <Download className="w-4 h-4" />
-            <span>{exportSuccess ? 'Report Downloaded!' : 'Export SPM Summary CSV'}</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Navigation Sub-Tabs */}
-      <div className="flex border border-slate-200 bg-white rounded-xl p-1 text-xs font-semibold overflow-x-auto space-x-1 shadow-xs">
-        <button
-          onClick={() => setActiveTab('metrics')}
-          className={`px-3.5 py-2 rounded-lg transition cursor-pointer flex items-center space-x-2 ${
-            activeTab === 'metrics'
-              ? 'bg-blue-600 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-          }`}
-        >
-          <BarChart2 className="w-3.5 h-3.5" />
-          <span>Operational Metrics & Throughput</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('spmWaterfall')}
-          className={`px-3.5 py-2 rounded-lg transition cursor-pointer flex items-center space-x-2 ${
-            activeTab === 'spmWaterfall'
-              ? 'bg-blue-600 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-          }`}
-        >
-          <Calendar className="w-3.5 h-3.5" />
-          <span>Waterfall 5-Week SDLC Tracking</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('budget')}
-          className={`px-3.5 py-2 rounded-lg transition cursor-pointer flex items-center space-x-2 ${
-            activeTab === 'budget'
-              ? 'bg-blue-600 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-          }`}
-        >
-          <Coins className="w-3.5 h-3.5" />
-          <span>Budget & Variance (45,100 Birr)</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('users')}
-          className={`px-3.5 py-2 rounded-lg transition cursor-pointer flex items-center space-x-2 ${
-            activeTab === 'users'
-              ? 'bg-blue-600 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-          }`}
-        >
-          <Users className="w-3.5 h-3.5" />
-          <span>User & Officer Role Access</span>
-        </button>
-      </div>
-
-      {/* TAB 1: OPERATIONAL METRICS */}
-      {activeTab === 'metrics' && (
-        <div className="space-y-6 animate-fade-in">
-          
-          {/* Top Stat Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-xs">
-              <span className="text-xs text-slate-600 font-medium">Total Received Applications</span>
-              <div className="text-2xl font-bold text-slate-900 font-mono mt-1">{totalApps}</div>
-              <span className="text-[10px] text-slate-500">Across all sectors</span>
+    <div className="space-y-8">
+      {/* ---------------------------------------------------------------- */}
+      {/* Overview                                                         */}
+      {/* ---------------------------------------------------------------- */}
+      {section === 'metrics' && (
+        <>
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <Eyebrow>Administration &amp; operations</Eyebrow>
+              <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">
+                Operational overview
+              </h2>
+              <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-slate-600">
+                Licence throughput, decision mix and the full application register across every
+                sector.
+              </p>
             </div>
 
-            <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-xs">
-              <span className="text-xs text-slate-600 font-medium">Approval Rate</span>
-              <div className="text-2xl font-bold text-emerald-600 font-mono mt-1">{approvalRate}%</div>
-              <span className="text-[10px] text-emerald-700">{approvedCount} official permits issued</span>
-            </div>
-
-            <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-xs">
-              <span className="text-xs text-slate-600 font-medium">Average Processing Time</span>
-              <div className="text-2xl font-bold text-slate-900 font-mono mt-1">2.1 Days</div>
-              <span className="text-[10px] text-slate-500">Target was ≤ 5 days</span>
-            </div>
-
-            <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-xs">
-              <span className="text-xs text-slate-600 font-medium">SPM Test Pass Rate</span>
-              <div className="text-2xl font-bold text-blue-600 font-mono mt-1">{SPM_PROJECT_INFO.testCasePassRate}</div>
-              <span className="text-[10px] text-blue-700">UAT Criterion &ge;95% passed</span>
-            </div>
+            <Button
+              variant="primary"
+              icon={<Download className="h-4 w-4" />}
+              onClick={handleExportCSV}
+            >
+              {exportSuccess ? 'Report downloaded' : 'Export summary CSV'}
+            </Button>
           </div>
 
-          {/* Applications Master Table */}
-          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
-            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
-              <h3 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
-                <FileCheck className="w-4 h-4 text-blue-600" />
-                <span>All System Work Permit Applications</span>
-              </h3>
-              <span className="text-xs text-slate-500 font-mono">
-                Active Records: {applications.length}
-              </span>
-            </div>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <StatCard
+              label="Applications received"
+              value={totalApps}
+              hint="Across all sectors"
+              icon={<FileCheck className="h-4 w-4" />}
+              tone="navy"
+            />
+            <StatCard
+              label="Approval rate"
+              value={`${approvalRate}%`}
+              tone="approved"
+              hint={`${approvedCount} licences issued`}
+              icon={<CheckCircle2 className="h-4 w-4" />}
+            />
+            <StatCard
+              label="Average processing"
+              value="2.1"
+              hint="Days — target was 5 or fewer"
+              icon={<Timer className="h-4 w-4" />}
+            />
+            <StatCard
+              label="Test pass rate"
+              value={SPM_PROJECT_INFO.testCasePassRate.split(' ')[0]}
+              tone="navy"
+              hint="UAT criterion was 95% or above"
+              icon={<Gauge className="h-4 w-4" />}
+            />
+          </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 text-slate-600 uppercase font-semibold text-[11px] tracking-wider border-b border-slate-200">
-                  <tr>
-                    <th className="px-4 py-3">Reference No.</th>
-                    <th className="px-4 py-3">Applicant</th>
-                    <th className="px-4 py-3">Employer</th>
-                    <th className="px-4 py-3">Role</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Assigned Officer</th>
-                    <th className="px-4 py-3 text-right">Permit</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {applications.map((app) => (
-                    <tr key={app.id} className="hover:bg-slate-50/80 transition">
-                      <td className="px-4 py-3 font-mono font-bold text-blue-700">
+          {/* Decision mix */}
+          <Card>
+            <CardHeader>
+              <CardTitle hint="How the current caseload is distributed">Decision mix</CardTitle>
+            </CardHeader>
+            <CardBody className="grid gap-5 sm:grid-cols-2">
+              {STATUS_ORDER.map((status) => {
+                const count = applications.filter((a) => a.status === status).length;
+                return (
+                  <Meter
+                    key={status}
+                    label={STATUS_META[status].label}
+                    value={count}
+                    max={totalApps || 1}
+                    readout={`${count} · ${
+                      totalApps > 0 ? Math.round((count / totalApps) * 100) : 0
+                    }%`}
+                    tone={
+                      status === 'Approved'
+                        ? 'approved'
+                        : status === 'Under Review'
+                          ? 'review'
+                          : status === 'Rejected'
+                            ? 'rejected'
+                            : 'navy'
+                    }
+                  />
+                );
+              })}
+            </CardBody>
+          </Card>
+
+          {/* Register */}
+          <Card>
+            <CardHeader>
+              <CardTitle hint="Every trading licence application on record">
+                Application register
+              </CardTitle>
+              <span className="numeric text-sm text-slate-500">{totalApps} records</span>
+            </CardHeader>
+
+            <Table>
+              <THead>
+                <tr>
+                  <Th>Reference</Th>
+                  <Th>Owner</Th>
+                  <Th>Trade name</Th>
+                  <Th>Sector</Th>
+                  <Th>Status</Th>
+                  <Th>Assigned officer</Th>
+                  <Th align="right">Licence</Th>
+                </tr>
+              </THead>
+              <TBody>
+                {applications.length === 0 ? (
+                  <TableEmpty colSpan={7}>No applications on record yet.</TableEmpty>
+                ) : (
+                  applications.map((app) => (
+                    <Tr key={app.id}>
+                      <Td className="numeric font-mono font-semibold text-navy-700">
                         {app.referenceNumber}
-                      </td>
-                      <td className="px-4 py-3 font-semibold text-slate-900">
-                        {app.fullName}
-                      </td>
-                      <td className="px-4 py-3 text-slate-600">
-                        {app.employerName}
-                      </td>
-                      <td className="px-4 py-3 text-slate-600">
-                        {app.jobTitle}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
-                            app.status === 'Approved'
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                              : app.status === 'Under Review'
-                              ? 'bg-amber-50 text-amber-800 border-amber-200'
-                              : app.status === 'Rejected'
-                              ? 'bg-rose-50 text-rose-700 border-rose-200'
-                              : 'bg-blue-50 text-blue-700 border-blue-200'
-                          }`}
-                        >
-                          {app.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-slate-500 text-[11px]">
-                        {app.assignedOfficerName || 'Pending Assignment'}
-                      </td>
-                      <td className="px-4 py-3 text-right">
+                      </Td>
+                      <Td className="font-semibold text-slate-900">{app.fullName}</Td>
+                      <Td className="text-slate-600">{app.tradeName}</Td>
+                      <Td className="text-slate-600">{app.businessSector}</Td>
+                      <Td>
+                        <StatusBadge status={app.status} size="sm" />
+                      </Td>
+                      <Td className="text-slate-500">
+                        {app.assignedOfficerName || 'Pending assignment'}
+                      </Td>
+                      <Td align="right">
                         {app.status === 'Approved' ? (
-                          <button
-                            onClick={() => onOpenPermit(app)}
-                            className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-[11px] font-semibold transition cursor-pointer"
-                          >
-                            View Permit
-                          </button>
+                          <Button size="sm" onClick={() => onOpenLicense(app)}>
+                            View
+                          </Button>
                         ) : (
-                          <span className="text-slate-400 font-mono text-[10px]">—</span>
+                          <span className="text-slate-400" aria-hidden="true">
+                            —
+                          </span>
                         )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-        </div>
+                      </Td>
+                    </Tr>
+                  ))
+                )}
+              </TBody>
+            </Table>
+          </Card>
+        </>
       )}
 
-      {/* TAB 2: WATERFALL SDLC TRACKING */}
-      {activeTab === 'spmWaterfall' && (
-        <div className="space-y-4 animate-fade-in">
-          <div className="bg-white border border-slate-200 p-6 rounded-xl shadow-xs">
-            <h3 className="text-sm font-bold text-slate-900 mb-2 flex items-center space-x-2">
-              <Calendar className="w-4 h-4 text-blue-600" />
-              <span>SPM Waterfall SDLC 5-Week Predictive Schedule</span>
-            </h3>
-            <p className="text-xs text-slate-600 mb-4">
-              Formal phased progression with sequential milestones, stakeholder sign-offs, and quality gate reviews (July 20 – August 21, 2026):
-            </p>
+      {/* ---------------------------------------------------------------- */}
+      {/* Waterfall schedule                                               */}
+      {/* ---------------------------------------------------------------- */}
+      {section === 'spmWaterfall' && (
+        <>
+          <SectionHeading
+            title="Waterfall SDLC schedule"
+            hint="Sequential phases with quality gates and formal sign-off, 20 July – 21 August 2026 (25 working days)"
+          />
 
-            <div className="space-y-3">
-              {SPM_PROJECT_INFO.phases.map((phase) => (
-                <div
-                  key={phase.phaseNumber}
-                  className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3"
+          <ol className="relative space-y-4 before:absolute before:bottom-8 before:left-3.75 before:top-8 before:w-0.5 before:bg-slate-200 before:content-['']">
+            {SPM_PROJECT_INFO.phases.map((phase) => (
+              <li key={phase.phaseNumber} className="relative flex gap-5">
+                {/* Spine marker */}
+                <span
+                  className="relative z-10 mt-5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-navy-700 bg-navy-700 text-sm font-semibold text-white"
+                  aria-hidden="true"
                 >
-                  <div>
-                    <div className="flex items-center space-x-2 mb-1">
-                      <span className="text-[10px] font-mono bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-bold border border-blue-200">
-                        {phase.duration}
-                      </span>
-                      <span className="text-xs text-slate-500">
-                        {phase.startDate} – {phase.endDate}
-                      </span>
-                    </div>
-                    <h4 className="text-sm font-bold text-slate-900">
-                      {phase.name}
-                    </h4>
-                    <div className="text-xs text-slate-600 mt-1 flex flex-wrap gap-2">
-                      {phase.deliverables.map((d, i) => (
-                        <span key={i} className="bg-white px-2 py-0.5 rounded text-[11px] border border-slate-200 text-slate-700">
-                          • {d}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
+                  {phase.phaseNumber}
+                </span>
 
-                  <div className="text-right shrink-0">
-                    <span className="px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full font-bold text-xs border border-emerald-200 flex items-center space-x-1 w-fit md:ml-auto">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>{phase.status}</span>
-                    </span>
-                    <span className="text-[10px] text-slate-500 block mt-1">
-                      Sign-off: {phase.signOffBy}
-                    </span>
-                  </div>
+                <Card className="flex-1">
+                  <CardBody className="space-y-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge tone="navy" shape="tag">
+                            {phase.duration}
+                          </Badge>
+                          <span className="text-sm text-slate-500">
+                            {phase.startDate} – {phase.endDate}
+                          </span>
+                        </div>
+                        <h3 className="mt-2 text-[15px] font-semibold text-slate-900">
+                          {phase.name}
+                        </h3>
+                      </div>
+
+                      <Badge
+                        tone="approved"
+                        icon={<CheckCircle2 className="h-3.5 w-3.5" />}
+                        className="shrink-0"
+                      >
+                        {phase.status}
+                      </Badge>
+                    </div>
+
+                    <div className="grid gap-5 sm:grid-cols-[1fr_auto]">
+                      <div>
+                        <Eyebrow>Deliverables</Eyebrow>
+                        <ul className="mt-2 space-y-1.5">
+                          {phase.deliverables.map((deliverable, index) => (
+                            <li
+                              key={index}
+                              className="flex items-start gap-2 text-sm text-slate-700"
+                            >
+                              <span
+                                className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-navy-600"
+                                aria-hidden="true"
+                              />
+                              {deliverable}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      <div className="sm:text-right">
+                        <Eyebrow>Sign-off</Eyebrow>
+                        <p className="mt-2 text-sm font-medium text-slate-700">
+                          {phase.signOffBy}
+                        </p>
+                      </div>
+                    </div>
+                  </CardBody>
+                </Card>
+              </li>
+            ))}
+          </ol>
+        </>
+      )}
+
+      {/* ---------------------------------------------------------------- */}
+      {/* Budget                                                           */}
+      {/* ---------------------------------------------------------------- */}
+      {section === 'budget' && (
+        <>
+          <SectionHeading
+            title="Budget & variance"
+            hint="Cost breakdown aligned with the Waterfall development milestones"
+          />
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <StatCard
+              label="Planned budget"
+              value={plannedTotal.toLocaleString()}
+              hint="ETB approved at charter sign-off"
+              icon={<Coins className="h-4 w-4" />}
+            />
+            <StatCard
+              label="Actual expenditure"
+              value={actualTotal.toLocaleString()}
+              hint="ETB spent across all categories"
+              icon={<Coins className="h-4 w-4" />}
+              tone="navy"
+            />
+            <StatCard
+              label="Variance"
+              value={`+${variance.toLocaleString()}`}
+              tone="approved"
+              hint={`ETB under budget · ${((variance / plannedTotal) * 100).toFixed(1)}%`}
+              icon={<TrendingDown className="h-4 w-4" />}
+            />
+          </div>
+
+          {/* Planned vs actual */}
+          <Card>
+            <CardHeader>
+              <CardTitle hint="Planned against actual, by category">Spend by category</CardTitle>
+            </CardHeader>
+            <CardBody className="space-y-6">
+              {SPM_PROJECT_INFO.budgetCategories.map((category) => (
+                <div key={category.category} className="space-y-2.5">
+                  <p className="text-sm font-semibold text-slate-900">{category.category}</p>
+                  <Meter
+                    label="Planned"
+                    value={category.plannedAmount}
+                    max={maxBudgetRow}
+                    readout={`${category.plannedAmount.toLocaleString()} ETB`}
+                    tone="navy"
+                  />
+                  <Meter
+                    label="Actual"
+                    value={category.actualAmount}
+                    max={maxBudgetRow}
+                    readout={`${category.actualAmount.toLocaleString()} ETB`}
+                    tone="approved"
+                  />
+                  <p className="text-sm text-slate-500">{category.notes}</p>
                 </div>
               ))}
-            </div>
-          </div>
-        </div>
+            </CardBody>
+          </Card>
+
+          {/* Ledger */}
+          <Card>
+            <CardHeader>
+              <CardTitle icon={<CalendarRange className="h-4 w-4 text-navy-600" />}>
+                Budget ledger
+              </CardTitle>
+            </CardHeader>
+            <Table>
+              <THead>
+                <tr>
+                  <Th>Category</Th>
+                  <Th align="right">Planned (ETB)</Th>
+                  <Th align="right">Actual (ETB)</Th>
+                  <Th align="right">Variance</Th>
+                </tr>
+              </THead>
+              <TBody>
+                {SPM_PROJECT_INFO.budgetCategories.map((category) => (
+                  <Tr key={category.category}>
+                    <Td className="font-medium text-slate-900">{category.category}</Td>
+                    <Td align="right" className="numeric font-mono">
+                      {category.plannedAmount.toLocaleString()}
+                    </Td>
+                    <Td align="right" className="numeric font-mono">
+                      {category.actualAmount.toLocaleString()}
+                    </Td>
+                    <Td align="right" className="numeric font-mono font-semibold text-approved-text">
+                      +{(category.plannedAmount - category.actualAmount).toLocaleString()}
+                    </Td>
+                  </Tr>
+                ))}
+                <tr className="border-t-2 border-slate-200 bg-slate-50 font-semibold">
+                  <Td className="font-semibold text-slate-900">Total</Td>
+                  <Td align="right" className="numeric font-mono font-semibold text-slate-900">
+                    {plannedTotal.toLocaleString()}
+                  </Td>
+                  <Td align="right" className="numeric font-mono font-semibold text-slate-900">
+                    {actualTotal.toLocaleString()}
+                  </Td>
+                  <Td align="right" className="numeric font-mono font-semibold text-approved-text">
+                    +{variance.toLocaleString()}
+                  </Td>
+                </tr>
+              </TBody>
+            </Table>
+          </Card>
+        </>
       )}
 
-      {/* TAB 3: BUDGET BREAKDOWN */}
-      {activeTab === 'budget' && (
-        <div className="space-y-4 animate-fade-in">
-          <div className="bg-white border border-slate-200 p-6 rounded-xl space-y-4 shadow-xs">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
-                  <Coins className="w-4 h-4 text-blue-600" />
-                  <span>SPM Project Budget Tracking (45,100 Birr Planned)</span>
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Cost breakdown aligned with Waterfall development milestones
-                </p>
-              </div>
-              <div className="text-right">
-                <span className="text-xs text-slate-500">Net Variance</span>
-                <div className="text-sm font-bold text-emerald-700 font-mono">+750 ETB Savings (Under Budget)</div>
-              </div>
-            </div>
+      {/* ---------------------------------------------------------------- */}
+      {/* Users                                                            */}
+      {/* ---------------------------------------------------------------- */}
+      {section === 'users' && (
+        <>
+          <SectionHeading
+            title={`Users & access (${users.length})`}
+            hint="Citizen applicants, directorate officers and system administrators"
+          />
 
-            <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
-              <table className="w-full text-xs text-left">
-                <thead className="bg-slate-50 text-slate-600 uppercase font-semibold text-[11px] tracking-wider border-b border-slate-200">
-                  <tr>
-                    <th className="px-4 py-3">Category</th>
-                    <th className="px-4 py-3 text-right">Planned (ETB)</th>
-                    <th className="px-4 py-3 text-right">Actual (ETB)</th>
-                    <th className="px-4 py-3">Description</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {SPM_PROJECT_INFO.budgetCategories.map((b, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50/80 transition">
-                      <td className="px-4 py-3 font-semibold text-slate-900">{b.category}</td>
-                      <td className="px-4 py-3 text-right font-mono text-slate-700 font-bold">{b.plannedAmount.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-right font-mono text-emerald-700 font-bold">{b.actualAmount.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-slate-500 text-[11px]">{b.notes}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 4: USERS & ACCESS */}
-      {activeTab === 'users' && (
-        <div className="space-y-4 animate-fade-in">
-          <div className="bg-white border border-slate-200 p-6 rounded-xl shadow-xs">
-            <h3 className="text-sm font-bold text-slate-900 mb-2 flex items-center space-x-2">
-              <Users className="w-4 h-4 text-blue-600" />
-              <span>System Accounts & Role Permissions</span>
-            </h3>
-            <p className="text-xs text-slate-600 mb-4">
-              Manage Citizen Applicants, Directorate Officers, and System Administrators:
-            </p>
-
-            <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
-              <table className="w-full text-xs text-left">
-                <thead className="bg-slate-50 text-slate-600 uppercase font-semibold text-[11px] tracking-wider border-b border-slate-200">
-                  <tr>
-                    <th className="px-4 py-3">User Name</th>
-                    <th className="px-4 py-3">Email & Phone</th>
-                    <th className="px-4 py-3">Role</th>
-                    <th className="px-4 py-3">Department / Badge</th>
-                    <th className="px-4 py-3 text-right">Access Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {users.map((u) => (
-                    <tr key={u.id} className="hover:bg-slate-50/80 transition">
-                      <td className="px-4 py-3 font-bold text-slate-900">{u.name}</td>
-                      <td className="px-4 py-3 text-slate-600">
-                        <div>{u.email}</div>
-                        <div className="text-[10px] text-slate-500">{u.phone}</div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase ${
-                            u.role === 'applicant'
-                              ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                              : u.role === 'officer'
-                              ? 'bg-amber-50 text-amber-800 border border-amber-200'
-                              : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                          }`}
-                        >
-                          {u.role}
+          <Card>
+            <CardHeader>
+              <CardTitle icon={<Users className="h-4 w-4 text-navy-600" />}>
+                System accounts
+              </CardTitle>
+            </CardHeader>
+            <Table>
+              <THead>
+                <tr>
+                  <Th>Name</Th>
+                  <Th>Contact</Th>
+                  <Th>Role</Th>
+                  <Th>Department / badge</Th>
+                  <Th align="right">Access</Th>
+                </tr>
+              </THead>
+              <TBody>
+                {users.map((user) => (
+                  <Tr key={user.id}>
+                    <Td className="font-semibold text-slate-900">{user.name}</Td>
+                    <Td>
+                      <div className="text-slate-700">{user.email}</div>
+                      <div className="numeric mt-0.5 text-xs text-slate-500">{user.phone}</div>
+                    </Td>
+                    <Td>
+                      <Badge
+                        tone={
+                          user.role === 'applicant'
+                            ? 'navy'
+                            : user.role === 'officer'
+                              ? 'review'
+                              : 'approved'
+                        }
+                      >
+                        {ROLE_LABEL[user.role]}
+                      </Badge>
+                    </Td>
+                    <Td className="text-slate-600">
+                      {user.department || 'Citizen applicant portal'}
+                      {user.badgeNumber && (
+                        <span className="numeric mt-0.5 block font-mono text-xs font-semibold text-navy-700">
+                          {user.badgeNumber}
                         </span>
-                      </td>
-                      <td className="px-4 py-3 text-slate-500 text-[11px]">
-                        {u.department || 'Citizen Applicant Portal'}
-                        {u.badgeNumber && <span className="font-mono text-blue-700 block font-bold">{u.badgeNumber}</span>}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded text-[10px] font-bold border border-emerald-200">
-                          Active
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
+                      )}
+                    </Td>
+                    <Td align="right">
+                      <Badge tone="approved" icon={<CheckCircle2 className="h-3.5 w-3.5" />}>
+                        Active
+                      </Badge>
+                    </Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          </Card>
+        </>
       )}
-
     </div>
   );
 };

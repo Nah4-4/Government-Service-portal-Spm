@@ -1,6 +1,6 @@
 {
-  "name": "Government Service Portal – Work Permit System",
-  "description": "Online Work Permit Application & Approval System for citizens and government officers, developed under Waterfall SDLC for SPM.",
+  "name": "Government Service Portal – Trading Licence System",
+  "description": "Online Business Trading Licence Application & Approval System for Ethiopian business owners and government officers, developed under Waterfall SDLC for SPM.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

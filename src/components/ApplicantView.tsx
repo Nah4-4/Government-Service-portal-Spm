@@ -1,179 +1,329 @@
 import React, { useState } from 'react';
-import { WorkPermitApplication, User, UploadedDoc } from '../types';
-import { PlusCircle, FileText, Download, CheckCircle2, Clock, XCircle, Eye, Sparkles, Upload, ShieldCheck, AlertCircle, Calendar, Building2, MapPin, Briefcase } from 'lucide-react';
-import confetti from 'canvas-confetti';
+import {
+  FileText,
+  Download,
+  CheckCircle2,
+  ShieldCheck,
+  Building2,
+  MapPin,
+  Paperclip,
+  PlusCircle,
+  ArrowRight,
+  Clock,
+  Wand2,
+  Info,
+  Store,
+} from 'lucide-react';
+import { TradingLicenseApplication, User, UploadedDoc, BusinessType, PremisesType } from '../types';
+import { STATUS_META } from '../config/status';
+import { Button } from './ui/Button';
+import { Card, CardBody, CardHeader, CardTitle, SectionHeading } from './ui/Card';
+import { Badge, DataPoint, Eyebrow } from './ui/Badge';
+import { StatusBadge, StatusDot } from './ui/StatusBadge';
+import { Field, Input, Select, Textarea, Checkbox } from './ui/Field';
+import { Modal } from './ui/Modal';
+import { Stepper, StepDef } from './ui/Stepper';
+import { StatCard } from './ui/StatCard';
+import { EmptyState } from './ui/EmptyState';
 
 interface ApplicantViewProps {
   currentUser: User;
-  applications: WorkPermitApplication[];
-  onSubmitApplication: (newApp: Omit<WorkPermitApplication, 'id' | 'referenceNumber' | 'status' | 'submittedAt' | 'updatedAt'>) => void;
-  onOpenPermit: (app: WorkPermitApplication) => void;
+  applications: TradingLicenseApplication[];
+  section: string;
+  isWizardOpen: boolean;
+  onOpenWizard: () => void;
+  onCloseWizard: () => void;
+  onSubmitApplication: (
+    newApp: Omit<TradingLicenseApplication, 'id' | 'referenceNumber' | 'status' | 'submittedAt' | 'updatedAt'>
+  ) => void;
+  onOpenLicense: (app: TradingLicenseApplication) => void;
+  onNavigate: (section: string) => void;
 }
+
+const WIZARD_STEPS: StepDef[] = [
+  { id: 1, label: 'Owner' },
+  { id: 2, label: 'Business' },
+  { id: 3, label: 'Documents' },
+  { id: 4, label: 'Review' },
+];
+
+const BUSINESS_TYPES: BusinessType[] = [
+  'Sole Proprietorship',
+  'Private Limited Company (PLC)',
+  'Share Company (S.C.)',
+  'General Partnership',
+  'Cooperative Society',
+  'Branch of Foreign Company',
+];
+
+const PREMISES_TYPES: PremisesType[] = [
+  'Owned',
+  'Rented / Leased',
+  'Shared',
+  'Home-based / Virtual',
+];
+
+const BUSINESS_SECTORS = [
+  'Wholesale & Retail Trade',
+  'Import & Export Trade',
+  'Construction & Building Materials',
+  'Agriculture & Agro-Processing',
+  'Food, Beverage & Hospitality',
+  'Manufacturing & Light Industry',
+  'Transport & Logistics',
+  'Information Technology & Digital Services',
+  'Financial & Business Consultancy',
+  'Health, Pharmacy & Medical Supplies',
+];
+
+const ETHIOPIAN_REGIONS = [
+  'Addis Ababa',
+  'Oromia',
+  'Amhara',
+  'Tigray',
+  'Sidama',
+  'Central Ethiopia',
+  'South Ethiopia',
+  'Somali',
+  'Afar',
+  'Benishangul-Gumuz',
+  'Gambela',
+  'Harari',
+  'Dire Dawa',
+];
 
 export const ApplicantView: React.FC<ApplicantViewProps> = ({
   currentUser,
   applications,
+  section,
+  isWizardOpen,
+  onOpenWizard,
+  onCloseWizard,
   onSubmitApplication,
-  onOpenPermit,
+  onOpenLicense,
+  onNavigate,
 }) => {
-  const [isApplying, setIsApplying] = useState(false);
+  const latest = applications[0];
   const [formStep, setFormStep] = useState<1 | 2 | 3 | 4>(1);
 
   // Form State
-  const [fullName, setFullName] = useState(currentUser.name || 'Abebe Kebede');
-  const [dateOfBirth, setDateOfBirth] = useState('1994-06-20');
-  const [gender, setGender] = useState<'Male' | 'Female' | 'Other'>('Male');
-  const [nationality, setNationality] = useState('Ethiopian');
-  const [address, setAddress] = useState('Bole Subcity, Woreda 04, Addis Ababa');
-  const [phone, setPhone] = useState(currentUser.phone || '+251 91 123 4567');
-  const [email, setEmail] = useState(currentUser.email || 'abebe.kebede@example.com');
+  const [fullName, setFullName] = useState(currentUser.name || latest?.fullName || '');
+  const [dateOfBirth, setDateOfBirth] = useState(latest?.dateOfBirth || '1994-06-20');
+  const [gender, setGender] = useState<'Male' | 'Female'>(latest?.gender || 'Male');
+  const [nationality, setNationality] = useState(latest?.nationality || 'Ethiopian');
+  const [address, setAddress] = useState(latest?.address || 'Bole Subcity, Woreda 04, Addis Ababa');
+  const [phone, setPhone] = useState(currentUser.phone || latest?.phone || '+251 91 123 4567');
+  const [email, setEmail] = useState(currentUser.email || latest?.email || '');
 
-  const [idType, setIdType] = useState<'National ID' | 'Passport'>('Passport');
-  const [idNumber, setIdNumber] = useState('EP9402194');
-  const [idExpiryDate, setIdExpiryDate] = useState('2032-05-15');
-  const [issuingCountry, setIssuingCountry] = useState('Ethiopia');
+  const [idType, setIdType] = useState<'Fayda National ID' | 'Kebele ID' | 'Passport'>(
+    (latest?.idType as 'Fayda National ID' | 'Kebele ID' | 'Passport') || 'Fayda National ID'
+  );
+  const [idNumber, setIdNumber] = useState(latest?.idNumber || 'FYD-9402-1948-2210');
+  const [idExpiryDate, setIdExpiryDate] = useState(latest?.idExpiryDate || '2032-05-15');
+  const [issuingAuthority, setIssuingAuthority] = useState(
+    latest?.issuingAuthority || 'Addis Ababa City Administration'
+  );
 
-  const [employerName, setEmployerName] = useState('Safaricom Telecommunications Ethiopia PLC');
-  const [employerRegistrationNo, setEmployerRegistrationNo] = useState('PLC-TEL-9941');
-  const [jobTitle, setJobTitle] = useState('Senior Network & Cybersecurity Engineer');
-  const [jobCategory, setJobCategory] = useState('Information & Communications Technology (ICT)');
-  const [jobDescription, setJobDescription] = useState('Implementation of national optical transport networks, SOC incident response, and ISO 27001 compliance standards.');
-  const [workLocation, setWorkLocation] = useState('Addis Ababa Regional Office');
-  const [contractDurationMonths, setContractDurationMonths] = useState<number>(24);
-  const [monthlySalary, setMonthlySalary] = useState<number>(95000);
-  const [salaryCurrency, setSalaryCurrency] = useState('ETB');
-  const [startDate, setStartDate] = useState('2026-09-01');
+  const [tradeName, setTradeName] = useState('Nile Star General Trading');
+  const [tradeNameRegistrationNo, setTradeNameRegistrationNo] = useState('TN/AA/2026/09941');
+  const [businessType, setBusinessType] = useState<BusinessType>(BUSINESS_TYPES[0]);
+  const [tinNumber, setTinNumber] = useState('0049217338');
+  const [businessSector, setBusinessSector] = useState(BUSINESS_SECTORS[0]);
+  const [businessSubSector, setBusinessSubSector] = useState(
+    'Retail sale of electronics and household appliances'
+  );
+  const [businessActivity, setBusinessActivity] = useState(
+    'Retail sale of consumer electronics, home appliances and accessories, including after-sales warranty servicing at the registered premises.'
+  );
+
+  const [region, setRegion] = useState('Addis Ababa');
+  const [subCity, setSubCity] = useState('Bole');
+  const [woreda, setWoreda] = useState('04');
+  const [houseNumber, setHouseNumber] = useState('B-1140');
+  const [premisesType, setPremisesType] = useState<PremisesType>('Rented / Leased');
+
+  const [capital, setCapital] = useState<number>(1500000);
+  const [capitalCurrency] = useState('ETB');
+  const [employeeCount, setEmployeeCount] = useState<number>(8);
+  const [commencementDate, setCommencementDate] = useState('2026-09-01');
+  const [licenseTermYears, setLicenseTermYears] = useState<number>(1);
 
   const [declarationAccepted, setDeclarationAccepted] = useState(true);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
-  // Document states
-  const [uploadedDocs, setUploadedDocs] = useState<UploadedDoc[]>([
+  const [uploadedDocs] = useState<UploadedDoc[]>([
     {
       id: 'doc-photo',
-      type: 'photo',
-      title: 'Passport Size Photograph (Biometric)',
-      fileName: 'applicant_photo_biometric.jpg',
+      type: 'owner_photo',
+      title: 'Owner Passport Size Photograph',
+      fileName: 'owner_photo_biometric.jpg',
       fileSize: '480 KB',
       uploadedAt: 'Just now',
       status: 'Pending',
       previewUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80',
     },
     {
-      id: 'doc-passport',
-      type: 'passport',
-      title: 'Passport / National ID Scan',
-      fileName: 'passport_identification_scan.pdf',
+      id: 'doc-id',
+      type: 'owner_id',
+      title: 'Owner Fayda / Kebele ID or Passport Scan',
+      fileName: 'owner_identification_scan.pdf',
       fileSize: '1.9 MB',
       uploadedAt: 'Just now',
       status: 'Pending',
     },
     {
-      id: 'doc-offer',
-      type: 'offer_letter',
-      title: 'Official Employer Appointment / Offer Letter',
-      fileName: 'safaricom_employment_offer_contract.pdf',
+      id: 'doc-trade-name',
+      type: 'trade_name_certificate',
+      title: 'Trade Name Registration Certificate',
+      fileName: 'trade_name_registration_certificate.pdf',
       fileSize: '2.5 MB',
       uploadedAt: 'Just now',
       status: 'Pending',
     },
     {
-      id: 'doc-med',
-      type: 'medical_cert',
-      title: 'Medical Fitness Certificate',
-      fileName: 'medical_examination_clean_report.pdf',
+      id: 'doc-tin',
+      type: 'tin_certificate',
+      title: 'TIN Registration Certificate',
+      fileName: 'tin_registration_certificate.pdf',
       fileSize: '950 KB',
       uploadedAt: 'Just now',
       status: 'Pending',
     },
     {
-      id: 'doc-deg',
-      type: 'qualification',
-      title: 'Educational Degree & Certifications',
-      fileName: 'bsc_electrical_computer_engineering.pdf',
+      id: 'doc-lease',
+      type: 'lease_agreement',
+      title: 'Premises Lease Agreement / Title Deed',
+      fileName: 'premises_lease_agreement_stamped.pdf',
       fileSize: '3.4 MB',
       uploadedAt: 'Just now',
       status: 'Pending',
     },
   ]);
 
-  // Demo auto-fill helpers for instant class presentations
-  const handleAutoFillTech = () => {
+  // Demo auto-fill helpers for class presentations
+  const handleAutoFillRetail = () => {
     setFullName('Henok Tadesse');
     setDateOfBirth('1993-08-14');
     setGender('Male');
     setNationality('Ethiopian');
     setAddress('Kirkos Subcity, House 502, Addis Ababa');
     setPhone('+251 92 888 1234');
-    setEmail('henok.tadesse@fintech.et');
-    setIdType('Passport');
-    setIdNumber('EP7749102');
+    setEmail('henok.tadesse@nilestar.et');
+    setIdType('Fayda National ID');
+    setIdNumber('FYD-7749-1027-4415');
     setIdExpiryDate('2031-11-20');
-    setIssuingCountry('Ethiopia');
-    setEmployerName('Chapa Financial Technologies');
-    setEmployerRegistrationNo('FIN-ET-2023-882');
-    setJobTitle('Lead Software Engineer & Platform Architect');
-    setJobCategory('FinTech & Software Engineering');
-    setJobDescription('Architecting microservices payment gateways, national switch integrations, and high-frequency transaction security.');
-    setWorkLocation('Bole Medhanialem, Addis Ababa');
-    setContractDurationMonths(24);
-    setMonthlySalary(120000);
-    setStartDate('2026-09-15');
+    setIssuingAuthority('Addis Ababa City Administration');
+    setTradeName('Sheger Building Materials Wholesale');
+    setTradeNameRegistrationNo('TN/AA/2026/08821');
+    setBusinessType('Private Limited Company (PLC)');
+    setTinNumber('0038829174');
+    setBusinessSector(BUSINESS_SECTORS[2]);
+    setBusinessSubSector('Wholesale of cement, steel and finishing materials');
+    setBusinessActivity(
+      'Bulk supply of cement, reinforcement steel and finishing materials to licensed contractors, with warehousing and delivery logistics.'
+    );
+    setRegion('Addis Ababa');
+    setSubCity('Kirkos');
+    setWoreda('05');
+    setHouseNumber('K-502');
+    setPremisesType('Rented / Leased');
+    setCapital(3200000);
+    setEmployeeCount(22);
+    setCommencementDate('2026-09-15');
+    setLicenseTermYears(1);
     setDeclarationAccepted(true);
     setErrors({});
   };
 
-  const handleAutoFillHealth = () => {
-    setFullName('Dr. Elena Rostova');
+  const handleAutoFillImportExport = () => {
+    setFullName('Meseret Alemu');
     setDateOfBirth('1985-04-12');
     setGender('Female');
-    setNationality('German');
+    setNationality('Ethiopian');
     setAddress('Kazanchis, House 104, Addis Ababa');
     setPhone('+251 94 555 8901');
-    setEmail('e.rostova@who.org');
-    setIdType('Passport');
-    setIdNumber('DE89201488');
+    setEmail('meseret.alemu@abyssiniatrade.et');
+    setIdType('Kebele ID');
+    setIdNumber('KEB-AA-8920148');
     setIdExpiryDate('2030-08-10');
-    setIssuingCountry('Germany');
-    setEmployerName('WHO & Ministry of Health Joint Initiative');
-    setEmployerRegistrationNo('NGO-INT-4491');
-    setJobTitle('Senior Epidemiologist & Clinical Researcher');
-    setJobCategory('Healthcare & Public Health');
-    setJobDescription('Directing national immunization data surveillance, epidemiological modeling, and specialist clinic capacity building.');
-    setWorkLocation('Black Lion Hospital & MOH HQ');
-    setContractDurationMonths(18);
-    setMonthlySalary(135000);
-    setStartDate('2026-10-01');
+    setIssuingAuthority('Addis Ababa City Administration');
+    setTradeName('Abyssinia Coffee Export Trading PLC');
+    setTradeNameRegistrationNo('TN/AA/2026/04491');
+    setBusinessType('Private Limited Company (PLC)');
+    setTinNumber('0044918820');
+    setBusinessSector(BUSINESS_SECTORS[1]);
+    setBusinessSubSector('Export of green coffee and oilseeds');
+    setBusinessActivity(
+      'Sourcing, grading and export of washed and natural green coffee and oilseeds to international buyers through ECX-registered channels.'
+    );
+    setRegion('Addis Ababa');
+    setSubCity('Kirkos');
+    setWoreda('08');
+    setHouseNumber('KZ-104');
+    setPremisesType('Owned');
+    setCapital(8500000);
+    setEmployeeCount(41);
+    setCommencementDate('2026-10-01');
+    setLicenseTermYears(1);
     setDeclarationAccepted(true);
     setErrors({});
   };
 
-  const validateForm = () => {
+  /** Validates a single wizard step, so Continue cannot skip a broken step. */
+  const validateStep = (step: number) => {
     const errs: { [key: string]: string } = {};
-    if (!fullName.trim()) errs.fullName = 'Full name is required';
-    if (!email.trim() || !email.includes('@')) errs.email = 'Valid email is required';
-    if (!phone.trim()) errs.phone = 'Phone number is required';
-    if (!idNumber.trim()) errs.idNumber = 'ID / Passport number is required';
-    if (!employerName.trim()) errs.employerName = 'Employer organization is required';
-    if (!jobTitle.trim()) errs.jobTitle = 'Job title is required';
-    if (!jobDescription.trim()) errs.jobDescription = 'Job description is required';
-    if (!declarationAccepted) errs.declaration = 'You must accept the legal declaration';
-    setErrors(errs);
-    return Object.keys(errs).length === 0;
-  };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!validateForm()) {
-      return;
+    if (step === 1) {
+      if (!fullName.trim()) errs.fullName = 'Enter your full legal name';
+      if (!nationality.trim()) errs.nationality = 'Enter your nationality';
+      if (!email.trim() || !email.includes('@')) errs.email = 'Enter a valid email address';
+      if (!phone.trim()) errs.phone = 'Enter a contact phone number';
+      if (!address.trim()) errs.address = 'Enter your residential address';
+      if (!idNumber.trim()) errs.idNumber = `Enter your ${idType.toLowerCase()} number`;
     }
 
-    // Trigger celebratory confetti
-    confetti({
-      particleCount: 80,
-      spread: 70,
-      origin: { y: 0.6 },
-    });
+    if (step === 2) {
+      if (!tradeName.trim()) errs.tradeName = 'Enter the registered trade name';
+      if (!/^\d{10}$/.test(tinNumber.trim())) errs.tinNumber = 'Enter the 10-digit TIN';
+      if (!businessSubSector.trim()) errs.businessSubSector = 'Enter the trade sub-sector';
+      if (!subCity.trim()) errs.subCity = 'Enter the sub-city or town';
+      if (!woreda.trim()) errs.woreda = 'Enter the woreda';
+      if (!capital || capital <= 0) errs.capital = 'Enter the registered capital';
+      if (!businessActivity.trim()) errs.businessActivity = 'Describe the trade activity';
+    }
+
+    if (step === 4) {
+      if (!declarationAccepted) errs.declaration = 'You must accept the legal declaration';
+    }
+
+    return errs;
+  };
+
+  const goToStep = (step: 1 | 2 | 3 | 4) => {
+    setErrors({});
+    setFormStep(step);
+  };
+
+  const handleContinue = () => {
+    const errs = validateStep(formStep);
+    setErrors(errs);
+    if (Object.keys(errs).length === 0 && formStep < 4) {
+      setFormStep((prev) => (prev + 1) as 1 | 2 | 3 | 4);
+    }
+  };
+
+  const submit = () => {
+    // Validate every step, not just the last, then jump to the first problem.
+    for (const step of [1, 2, 4]) {
+      const errs = validateStep(step);
+      if (Object.keys(errs).length > 0) {
+        setErrors(errs);
+        setFormStep(step as 1 | 2 | 4);
+        return;
+      }
+    }
+
+    setErrors({});
 
     onSubmitApplication({
       applicantId: currentUser.id,
@@ -187,741 +337,877 @@ export const ApplicantView: React.FC<ApplicantViewProps> = ({
       idType,
       idNumber,
       idExpiryDate,
-      issuingCountry,
-      employerName,
-      employerRegistrationNo,
-      jobTitle,
-      jobCategory,
-      jobDescription,
-      workLocation,
-      contractDurationMonths: Number(contractDurationMonths),
-      monthlySalary: Number(monthlySalary),
-      salaryCurrency,
-      startDate,
+      issuingAuthority,
+      tradeName,
+      tradeNameRegistrationNo,
+      businessType,
+      tinNumber,
+      businessSector,
+      businessSubSector,
+      businessActivity,
+      region,
+      subCity,
+      woreda,
+      houseNumber,
+      premisesType,
+      capital: Number(capital),
+      capitalCurrency,
+      employeeCount: Number(employeeCount),
+      commencementDate,
+      licenseTermYears: Number(licenseTermYears),
       documents: uploadedDocs,
       declarationAccepted,
     });
 
-    setIsApplying(false);
+    setFormStep(1);
+    onCloseWizard();
   };
 
+  /**
+   * Enter inside any field used to submit the whole application from step 1,
+   * because a single form wrapped all four steps. Advance instead, and only
+   * actually submit from the final step.
+   */
+  const handleFormSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (formStep < 4) {
+      handleContinue();
+    } else {
+      submit();
+    }
+  };
+
+  const approvedCount = applications.filter((a) => a.status === 'Approved').length;
+  const inProgressCount = applications.filter(
+    (a) => a.status === 'Submitted' || a.status === 'Under Review'
+  ).length;
+
   return (
-    <div className="space-y-6">
-      
-      {/* Top Banner / Welcome Bar */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center space-x-2 mb-1">
-            <span className="px-2 py-0.5 text-[10px] font-bold uppercase bg-blue-50 text-blue-700 border border-blue-200 rounded">
-              Citizen Portal
-            </span>
-            <span className="text-xs text-slate-500">
-              National Directorate of Labour & Employment
-            </span>
+    <div className="space-y-8">
+      {section === 'overview' && (
+        <>
+          {/* Greeting */}
+          <div>
+            <Eyebrow>Citizen portal</Eyebrow>
+            <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">
+              Welcome, {currentUser.name.split(' ')[0]}
+            </h2>
+            <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-slate-600">
+              Apply for a business trading licence online, upload your certified documents once,
+              follow the review as it happens, and download your sealed licence the moment it is
+              approved.
+            </p>
           </div>
-          <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
-            Welcome, {currentUser.name}
-          </h2>
-          <p className="text-xs sm:text-sm text-slate-600 max-w-2xl mt-1">
-            Submit your official work permit application online, upload certified documentation, track live review progress, and download your approved digital permit certificate.
-          </p>
+
+          {/* At a glance */}
+          <div className="grid gap-4 sm:grid-cols-3">
+            <StatCard
+              label="Total applications"
+              value={applications.length}
+              hint="Filed under your account"
+              icon={<FileText className="h-4 w-4" />}
+            />
+            <StatCard
+              label="In progress"
+              value={inProgressCount}
+              tone="review"
+              hint="Awaiting a directorate decision"
+              icon={<Clock className="h-4 w-4" />}
+            />
+            <StatCard
+              label="Licences issued"
+              value={approvedCount}
+              tone="approved"
+              hint="Ready to download as PDF"
+              icon={<CheckCircle2 className="h-4 w-4" />}
+            />
+          </div>
+
+          {/* Next step */}
+          {latest ? (
+            <Card>
+              <CardHeader>
+                <CardTitle hint="Your most recent application">Where things stand</CardTitle>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  trailingIcon={<ArrowRight className="h-3.5 w-3.5" />}
+                  onClick={() => onNavigate('applications')}
+                >
+                  View all
+                </Button>
+              </CardHeader>
+              <CardBody className="space-y-5">
+                <div className="flex flex-wrap items-center gap-3">
+                  <StatusBadge status={latest.status} />
+                  <Badge tone="navy" shape="tag" mono>
+                    {latest.referenceNumber}
+                  </Badge>
+                  <span className="text-sm text-slate-500">
+                    {STATUS_META[latest.status].hint}
+                  </span>
+                </div>
+
+                <p className="text-[15px] font-semibold text-slate-900">{latest.tradeName}</p>
+
+                {latest.status === 'Approved' && (
+                  <Button
+                    variant="primary"
+                    icon={<Download className="h-4 w-4" />}
+                    onClick={() => onOpenLicense(latest)}
+                  >
+                    View your trading licence
+                  </Button>
+                )}
+              </CardBody>
+            </Card>
+          ) : (
+            <EmptyState
+              icon={<FileText className="h-6 w-6" />}
+              title="No applications yet"
+              description="Start a new trading licence application. It takes four short steps and you can review everything before submitting."
+              action={
+                <Button
+                  variant="primary"
+                  icon={<PlusCircle className="h-4 w-4" />}
+                  onClick={onOpenWizard}
+                >
+                  Start an application
+                </Button>
+              }
+            />
+          )}
+        </>
+      )}
+
+      {section === 'applications' && (
+        <>
+          <SectionHeading
+            title={`My applications (${applications.length})`}
+            hint="Live status tracking and automated licence issuance"
+            actions={
+              <Button
+                variant="primary"
+                icon={<PlusCircle className="h-4 w-4" />}
+                onClick={onOpenWizard}
+              >
+                New application
+              </Button>
+            }
+          />
+
+          {applications.length === 0 ? (
+            <EmptyState
+              icon={<FileText className="h-6 w-6" />}
+              title="No applications submitted yet"
+              description="Once you submit an application it will appear here with a reference number and live progress."
+              action={
+                <Button
+                  variant="primary"
+                  icon={<PlusCircle className="h-4 w-4" />}
+                  onClick={onOpenWizard}
+                >
+                  Start an application
+                </Button>
+              }
+            />
+          ) : (
+            <div className="space-y-5">
+              {applications.map((app) => (
+                <ApplicationCard key={app.id} app={app} onOpenLicense={onOpenLicense} />
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ---------------------------------------------------------------- */}
+      {/* Application wizard                                               */}
+      {/* ---------------------------------------------------------------- */}
+      <Modal
+        open={isWizardOpen}
+        onClose={onCloseWizard}
+        size="md"
+        eyebrow={
+          <Badge tone="navy" shape="tag" uppercase>
+            Government application form
+          </Badge>
+        }
+        title="Business trading licence application"
+        subtitle="Four steps. Nothing is submitted until you confirm on the last one."
+        flushBody
+        footer={
+          <>
+            {formStep > 1 ? (
+              <Button onClick={() => goToStep((formStep - 1) as 1 | 2 | 3)}>Back</Button>
+            ) : (
+              <Button variant="ghost" onClick={onCloseWizard}>
+                Cancel
+              </Button>
+            )}
+
+            {formStep < 4 ? (
+              <Button
+                variant="primary"
+                trailingIcon={<ArrowRight className="h-4 w-4" />}
+                onClick={handleContinue}
+              >
+                Continue
+              </Button>
+            ) : (
+              <Button
+                variant="primary"
+                size="lg"
+                icon={<ShieldCheck className="h-4 w-4" />}
+                onClick={submit}
+              >
+                Submit application
+              </Button>
+            )}
+          </>
+        }
+      >
+        {/* Progress */}
+        <div className="border-b border-slate-200 bg-slate-50/60 px-6 py-5">
+          <Stepper steps={WIZARD_STEPS} current={formStep} onStepClick={(id) => goToStep(id as 1 | 2 | 3 | 4)} />
         </div>
 
-        <div className="flex items-center space-x-3">
-          <button
-            id="new-application-button"
-            onClick={() => {
-              setIsApplying(true);
-              setFormStep(1);
-            }}
-            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-xs flex items-center space-x-2 transition cursor-pointer text-xs sm:text-sm"
-          >
-            <PlusCircle className="w-4 h-4" />
-            <span>Apply for New Work Permit</span>
-          </button>
-        </div>
-      </div>
-
-      {/* NEW APPLICATION MODAL / WIZARD */}
-      {isApplying && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-fade-in">
-          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-3xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden text-slate-800">
-            
-            {/* Modal Header */}
-            <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex items-center justify-between">
-              <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                  Government Application Form
-                </span>
-                <h3 className="text-lg font-bold text-slate-900 mt-1">
-                  Online Work Permit Application Form
-                </h3>
+        <form onSubmit={handleFormSubmit} className="px-6 py-6">
+          {/* STEP 1 — IDENTITY */}
+          {formStep === 1 && (
+            <div className="animate-fade-in space-y-6">
+              {/* Demo prefill, kept quiet and only where it is useful */}
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+                <Wand2 className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+                <span className="text-sm text-slate-500">Prefill with sample data:</span>
+                <Button variant="ghost" size="sm" onClick={handleAutoFillRetail}>
+                  Building materials
+                </Button>
+                <Button variant="ghost" size="sm" onClick={handleAutoFillImportExport}>
+                  Coffee exporter
+                </Button>
               </div>
 
-              {/* 1-Click Auto Fill Demo Tools for Class Presentation */}
-              <div className="flex items-center space-x-2">
-                <span className="text-[11px] text-slate-500 hidden sm:inline font-medium">1-Click SPM Demo:</span>
-                <button
-                  type="button"
-                  onClick={handleAutoFillTech}
-                  className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-semibold flex items-center space-x-1 transition cursor-pointer"
-                  title="Auto fill sample Tech Engineer application"
-                >
-                  <Sparkles className="w-3 h-3 text-blue-600" />
-                  <span>Fill ICT Lead</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleAutoFillHealth}
-                  className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg text-xs font-semibold flex items-center space-x-1 transition cursor-pointer"
-                  title="Auto fill sample Healthcare Doctor application"
-                >
-                  <Sparkles className="w-3 h-3 text-purple-600" />
-                  <span>Fill Medical Specialist</span>
-                </button>
-                <button
-                  onClick={() => setIsApplying(false)}
-                  className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition cursor-pointer"
-                >
-                  <XCircle className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-
-            {/* Step Stepper Header */}
-            <div className="bg-slate-50/50 px-6 py-2.5 border-b border-slate-200 flex justify-between text-xs font-semibold">
-              <button
-                type="button"
-                onClick={() => setFormStep(1)}
-                className={`flex items-center space-x-1.5 cursor-pointer ${
-                  formStep === 1 ? 'text-blue-700 font-bold' : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${
-                  formStep === 1 ? 'bg-blue-600 text-white' : 'border border-slate-300 text-slate-500'
-                }`}>1</span>
-                <span>1. Personal & ID</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setFormStep(2)}
-                className={`flex items-center space-x-1.5 cursor-pointer ${
-                  formStep === 2 ? 'text-blue-700 font-bold' : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${
-                  formStep === 2 ? 'bg-blue-600 text-white' : 'border border-slate-300 text-slate-500'
-                }`}>2</span>
-                <span>2. Employment Info</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setFormStep(3)}
-                className={`flex items-center space-x-1.5 cursor-pointer ${
-                  formStep === 3 ? 'text-blue-700 font-bold' : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${
-                  formStep === 3 ? 'bg-blue-600 text-white' : 'border border-slate-300 text-slate-500'
-                }`}>3</span>
-                <span>3. Supporting Docs</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setFormStep(4)}
-                className={`flex items-center space-x-1.5 cursor-pointer ${
-                  formStep === 4 ? 'text-blue-700 font-bold' : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${
-                  formStep === 4 ? 'bg-blue-600 text-white' : 'border border-slate-300 text-slate-500'
-                }`}>4</span>
-                <span>4. Review & Submit</span>
-              </button>
-            </div>
-
-            {/* Form Content */}
-            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
-              
-              {/* STEP 1: PERSONAL & IDENTIFICATION */}
-              {formStep === 1 && (
-                <div className="space-y-4 animate-fade-in">
-                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center space-x-1.5 border-b border-slate-200 pb-2">
-                    <ShieldCheck className="w-4 h-4 text-blue-600" />
-                    <span>Personal Information & Identity</span>
-                  </h4>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                    <div>
-                      <label className="block text-slate-700 font-medium mb-1">Full Legal Name *</label>
-                      <input
-                        type="text"
+              <FormSection icon={<ShieldCheck className="h-4 w-4" />} title="Owner information">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Full legal name" required error={errors.fullName}>
+                    {(p) => (
+                      <Input
+                        {...p}
                         value={fullName}
                         onChange={(e) => setFullName(e.target.value)}
-                        className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
-                        placeholder="e.g. Abebe Kebede"
-                        required
+                        placeholder={currentUser.name ? `e.g. ${currentUser.name}` : 'e.g. Eyob Derebay'}
                       />
-                      {errors.fullName && <p className="text-rose-600 text-[11px] mt-1">{errors.fullName}</p>}
-                    </div>
+                    )}
+                  </Field>
 
-                    <div>
-                      <label className="block text-slate-700 font-medium mb-1">Nationality *</label>
-                      <input
-                        type="text"
+                  <Field label="Nationality" required error={errors.nationality}>
+                    {(p) => (
+                      <Input
+                        {...p}
                         value={nationality}
                         onChange={(e) => setNationality(e.target.value)}
-                        className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
-                        placeholder="e.g. Ethiopian / Foreign"
-                        required
+                        placeholder="e.g. Ethiopian"
                       />
-                    </div>
+                    )}
+                  </Field>
 
-                    <div>
-                      <label className="block text-slate-700 font-medium mb-1">Date of Birth *</label>
-                      <input
+                  <Field label="Date of birth" required>
+                    {(p) => (
+                      <Input
+                        {...p}
                         type="date"
                         value={dateOfBirth}
                         onChange={(e) => setDateOfBirth(e.target.value)}
-                        className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
-                        required
                       />
-                    </div>
+                    )}
+                  </Field>
 
-                    <div>
-                      <label className="block text-slate-700 font-medium mb-1">Gender *</label>
-                      <select
+                  <Field label="Gender" required>
+                    {(p) => (
+                      <Select
+                        {...p}
                         value={gender}
-                        onChange={(e) => setGender(e.target.value as any)}
-                        className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
+                        onChange={(e) => setGender(e.target.value as 'Male' | 'Female')}
                       >
                         <option value="Male">Male</option>
                         <option value="Female">Female</option>
-                        <option value="Other">Other</option>
-                      </select>
-                    </div>
+                      </Select>
+                    )}
+                  </Field>
 
-                    <div>
-                      <label className="block text-slate-700 font-medium mb-1">Email Address *</label>
-                      <input
+                  <Field label="Email address" required error={errors.email} hint="Decisions are sent here">
+                    {(p) => (
+                      <Input
+                        {...p}
                         type="email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
                         placeholder="applicant@example.com"
-                        required
                       />
-                      {errors.email && <p className="text-rose-600 text-[11px] mt-1">{errors.email}</p>}
-                    </div>
+                    )}
+                  </Field>
 
-                    <div>
-                      <label className="block text-slate-700 font-medium mb-1">Phone Number *</label>
-                      <input
+                  <Field label="Phone number" required error={errors.phone} hint="Used for SMS alerts">
+                    {(p) => (
+                      <Input
+                        {...p}
                         type="tel"
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
-                        className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
                         placeholder="+251 91 123 4567"
-                        required
                       />
-                    </div>
+                    )}
+                  </Field>
 
-                    <div className="sm:col-span-2">
-                      <label className="block text-slate-700 font-medium mb-1">Residential Address *</label>
-                      <input
-                        type="text"
+                  <Field
+                    label="Residential address"
+                    required
+                    error={errors.address}
+                    className="sm:col-span-2"
+                  >
+                    {(p) => (
+                      <Input
+                        {...p}
                         value={address}
                         onChange={(e) => setAddress(e.target.value)}
-                        className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
-                        placeholder="Subcity, Woreda, House Number, City"
-                        required
+                        placeholder="Subcity, Woreda, House number, City"
                       />
-                    </div>
-                  </div>
+                    )}
+                  </Field>
+                </div>
+              </FormSection>
 
-                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center space-x-1.5 border-b border-slate-200 pb-2 pt-3">
-                    <FileText className="w-4 h-4 text-blue-600" />
-                    <span>Identification Document</span>
-                  </h4>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-                    <div>
-                      <label className="block text-slate-700 font-medium mb-1">ID Type *</label>
-                      <select
+              <FormSection icon={<FileText className="h-4 w-4" />} title="Identification document">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Document type" required>
+                    {(p) => (
+                      <Select
+                        {...p}
                         value={idType}
-                        onChange={(e) => setIdType(e.target.value as any)}
-                        className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
+                        onChange={(e) =>
+                          setIdType(e.target.value as 'Fayda National ID' | 'Kebele ID' | 'Passport')
+                        }
                       >
+                        <option value="Fayda National ID">Fayda National ID</option>
+                        <option value="Kebele ID">Kebele ID card</option>
                         <option value="Passport">Passport</option>
-                        <option value="National ID">National ID Card</option>
-                      </select>
-                    </div>
+                      </Select>
+                    )}
+                  </Field>
 
-                    <div>
-                      <label className="block text-slate-700 font-medium mb-1">ID / Passport Number *</label>
-                      <input
-                        type="text"
+                  <Field label="Document number" required error={errors.idNumber}>
+                    {(p) => (
+                      <Input
+                        {...p}
+                        mono
                         value={idNumber}
                         onChange={(e) => setIdNumber(e.target.value)}
-                        className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 font-mono focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
-                        placeholder="EP8492019"
-                        required
+                        placeholder="FYD-9402-1948-2210"
                       />
-                      {errors.idNumber && <p className="text-rose-600 text-[11px] mt-1">{errors.idNumber}</p>}
-                    </div>
+                    )}
+                  </Field>
 
-                    <div>
-                      <label className="block text-slate-700 font-medium mb-1">ID Expiry Date *</label>
-                      <input
+                  <Field label="Expiry date" required>
+                    {(p) => (
+                      <Input
+                        {...p}
                         type="date"
                         value={idExpiryDate}
                         onChange={(e) => setIdExpiryDate(e.target.value)}
-                        className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
-                        required
                       />
-                    </div>
-                  </div>
+                    )}
+                  </Field>
+
+                  <Field label="Issuing authority" required>
+                    {(p) => (
+                      <Input
+                        {...p}
+                        value={issuingAuthority}
+                        onChange={(e) => setIssuingAuthority(e.target.value)}
+                        placeholder="e.g. Addis Ababa City Administration"
+                      />
+                    )}
+                  </Field>
                 </div>
-              )}
-
-              {/* STEP 2: EMPLOYMENT DETAILS */}
-              {formStep === 2 && (
-                <div className="space-y-4 animate-fade-in">
-                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center space-x-1.5 border-b border-slate-200 pb-2">
-                    <Building2 className="w-4 h-4 text-blue-600" />
-                    <span>Sponsoring Employer & Contract Details</span>
-                  </h4>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                    <div>
-                      <label className="block text-slate-700 font-medium mb-1">Employer / Sponsoring Organization *</label>
-                      <input
-                        type="text"
-                        value={employerName}
-                        onChange={(e) => setEmployerName(e.target.value)}
-                        className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
-                        placeholder="e.g. Ethio Telecom / NGO / PLC"
-                        required
-                      />
-                      {errors.employerName && <p className="text-rose-600 text-[11px] mt-1">{errors.employerName}</p>}
-                    </div>
-
-                    <div>
-                      <label className="block text-slate-700 font-medium mb-1">Employer Registration / Tax ID</label>
-                      <input
-                        type="text"
-                        value={employerRegistrationNo}
-                        onChange={(e) => setEmployerRegistrationNo(e.target.value)}
-                        className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 font-mono focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
-                        placeholder="ET-REG-2024-991"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-slate-700 font-medium mb-1">Job Title *</label>
-                      <input
-                        type="text"
-                        value={jobTitle}
-                        onChange={(e) => setJobTitle(e.target.value)}
-                        className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
-                        placeholder="e.g. Senior Systems Architect"
-                        required
-                      />
-                      {errors.jobTitle && <p className="text-rose-600 text-[11px] mt-1">{errors.jobTitle}</p>}
-                    </div>
-
-                    <div>
-                      <label className="block text-slate-700 font-medium mb-1">Industry / Category *</label>
-                      <select
-                        value={jobCategory}
-                        onChange={(e) => setJobCategory(e.target.value)}
-                        className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
-                      >
-                        <option value="Information & Communications Technology (ICT)">Information & Communications Technology (ICT)</option>
-                        <option value="Healthcare & Specialized Medicine">Healthcare & Specialized Medicine</option>
-                        <option value="Engineering & Infrastructure Construction">Engineering & Infrastructure Construction</option>
-                        <option value="Agriculture & Food Processing">Agriculture & Food Processing</option>
-                        <option value="Finance & Banking Operations">Finance & Banking Operations</option>
-                        <option value="Education & Academic Research">Education & Academic Research</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-slate-700 font-medium mb-1">Work Location *</label>
-                      <input
-                        type="text"
-                        value={workLocation}
-                        onChange={(e) => setWorkLocation(e.target.value)}
-                        className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
-                        placeholder="e.g. Addis Ababa HQ"
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-slate-700 font-medium mb-1">Contract Duration (Months) *</label>
-                      <select
-                        value={contractDurationMonths}
-                        onChange={(e) => setContractDurationMonths(Number(e.target.value))}
-                        className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
-                      >
-                        <option value={6}>6 Months (Short Term)</option>
-                        <option value={12}>12 Months (1 Year)</option>
-                        <option value={24}>24 Months (2 Years)</option>
-                        <option value={36}>36 Months (3 Years)</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-slate-700 font-medium mb-1">Monthly Salary (ETB) *</label>
-                      <input
-                        type="number"
-                        value={monthlySalary}
-                        onChange={(e) => setMonthlySalary(Number(e.target.value))}
-                        className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 font-mono focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
-                        placeholder="85000"
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-slate-700 font-medium mb-1">Proposed Start Date *</label>
-                      <input
-                        type="date"
-                        value={startDate}
-                        onChange={(e) => setStartDate(e.target.value)}
-                        className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
-                        required
-                      />
-                    </div>
-
-                    <div className="sm:col-span-2">
-                      <label className="block text-slate-700 font-medium mb-1">Detailed Job Duties & Responsibilities *</label>
-                      <textarea
-                        rows={3}
-                        value={jobDescription}
-                        onChange={(e) => setJobDescription(e.target.value)}
-                        className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
-                        placeholder="Describe key duties, specialized skills required, and department role..."
-                        required
-                      />
-                      {errors.jobDescription && <p className="text-rose-600 text-[11px] mt-1">{errors.jobDescription}</p>}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* STEP 3: DOCUMENT UPLOADS */}
-              {formStep === 3 && (
-                <div className="space-y-4 animate-fade-in">
-                  <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-                    <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center space-x-1.5">
-                      <Upload className="w-4 h-4 text-blue-600" />
-                      <span>Required Supporting Documents</span>
-                    </h4>
-                    <span className="text-[11px] text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 font-semibold">
-                      5 of 5 Documents Attached
-                    </span>
-                  </div>
-
-                  <p className="text-xs text-slate-600">
-                    Government regulations require the following 5 certified documents for work permit approval:
-                  </p>
-
-                  <div className="space-y-2.5">
-                    {uploadedDocs.map((doc, idx) => (
-                      <div
-                        key={doc.id}
-                        className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center justify-between hover:border-slate-300 transition"
-                      >
-                        <div className="flex items-center space-x-3">
-                          <div className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-700 font-bold text-xs">
-                            {idx + 1}
-                          </div>
-                          <div>
-                            <div className="text-xs font-bold text-slate-800">{doc.title}</div>
-                            <div className="text-[11px] text-slate-500 flex items-center space-x-2">
-                              <span className="font-mono">{doc.fileName}</span>
-                              <span>•</span>
-                              <span>{doc.fileSize}</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center space-x-2">
-                          <span className="text-[10px] px-2 py-0.5 rounded font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center space-x-1">
-                            <CheckCircle2 className="w-3 h-3" />
-                            <span>Attached</span>
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* STEP 4: REVIEW & DECLARATION */}
-              {formStep === 4 && (
-                <div className="space-y-4 animate-fade-in">
-                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center space-x-1.5 border-b border-slate-200 pb-2">
-                    <ShieldCheck className="w-4 h-4 text-blue-600" />
-                    <span>Application Summary & Legal Declaration</span>
-                  </h4>
-
-                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                    <div>
-                      <span className="text-slate-500 block text-[10px] uppercase font-bold">Applicant</span>
-                      <span className="font-bold text-slate-900">{fullName}</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-500 block text-[10px] uppercase font-bold">ID / Passport</span>
-                      <span className="font-mono text-blue-700 font-bold">{idNumber}</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-500 block text-[10px] uppercase font-bold">Employer</span>
-                      <span className="font-bold text-slate-900">{employerName}</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-500 block text-[10px] uppercase font-bold">Position</span>
-                      <span className="text-slate-800 font-medium">{jobTitle}</span>
-                    </div>
-                  </div>
-
-                  {/* Declaration Box */}
-                  <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-3">
-                    <div className="flex items-start space-x-2.5">
-                      <input
-                        type="checkbox"
-                        id="declaration-checkbox"
-                        checked={declarationAccepted}
-                        onChange={(e) => setDeclarationAccepted(e.target.checked)}
-                        className="mt-1 w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                      />
-                      <label htmlFor="declaration-checkbox" className="text-xs text-slate-700 leading-relaxed cursor-pointer">
-                        <strong className="text-slate-900">Applicant Legal Declaration & Consent:</strong> I hereby certify that the information provided in this work permit application and all accompanying supporting documents are true, complete, and authentic. I authorize the Directorate of Foreign Employment to verify these records with my employer and relevant educational/medical authorities.
-                      </label>
-                    </div>
-                    {errors.declaration && <p className="text-rose-600 text-xs font-semibold">{errors.declaration}</p>}
-                  </div>
-                </div>
-              )}
-
-            </form>
-
-            {/* Modal Bottom Controls */}
-            <div className="bg-slate-50 px-6 py-3 border-t border-slate-200 flex items-center justify-between">
-              {formStep > 1 ? (
-                <button
-                  type="button"
-                  onClick={() => setFormStep((prev) => (prev - 1) as any)}
-                  className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-semibold transition cursor-pointer"
-                >
-                  Back
-                </button>
-              ) : (
-                <div />
-              )}
-
-              {formStep < 4 ? (
-                <button
-                  type="button"
-                  onClick={() => setFormStep((prev) => (prev + 1) as any)}
-                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition shadow-xs cursor-pointer"
-                >
-                  Continue to Next Step
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleSubmit}
-                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition shadow-xs flex items-center space-x-2 cursor-pointer"
-                >
-                  <ShieldCheck className="w-4 h-4" />
-                  <span>Submit Application to Government</span>
-                </button>
-              )}
+              </FormSection>
             </div>
+          )}
 
+          {/* STEP 2 — BUSINESS */}
+          {formStep === 2 && (
+            <div className="animate-fade-in space-y-6">
+              <FormSection
+                icon={<Store className="h-4 w-4" />}
+                title="Business registration details"
+              >
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Registered trade name" required error={errors.tradeName}>
+                    {(p) => (
+                      <Input
+                        {...p}
+                        value={tradeName}
+                        onChange={(e) => setTradeName(e.target.value)}
+                        placeholder="e.g. Nile Star General Trading"
+                      />
+                    )}
+                  </Field>
+
+                  <Field label="Trade name registration no." hint="Optional">
+                    {(p) => (
+                      <Input
+                        {...p}
+                        mono
+                        required={false}
+                        value={tradeNameRegistrationNo}
+                        onChange={(e) => setTradeNameRegistrationNo(e.target.value)}
+                        placeholder="TN/AA/2026/09941"
+                      />
+                    )}
+                  </Field>
+
+                  <Field label="Legal business type" required>
+                    {(p) => (
+                      <Select
+                        {...p}
+                        value={businessType}
+                        onChange={(e) => setBusinessType(e.target.value as BusinessType)}
+                      >
+                        {BUSINESS_TYPES.map((type) => (
+                          <option key={type} value={type}>
+                            {type}
+                          </option>
+                        ))}
+                      </Select>
+                    )}
+                  </Field>
+
+                  <Field
+                    label="TIN (Taxpayer ID)"
+                    required
+                    error={errors.tinNumber}
+                    hint="10 digits from the Ministry of Revenues"
+                  >
+                    {(p) => (
+                      <Input
+                        {...p}
+                        mono
+                        inputMode="numeric"
+                        maxLength={10}
+                        value={tinNumber}
+                        onChange={(e) => setTinNumber(e.target.value)}
+                        placeholder="0049217338"
+                      />
+                    )}
+                  </Field>
+
+                  <Field label="Business sector" required>
+                    {(p) => (
+                      <Select
+                        {...p}
+                        value={businessSector}
+                        onChange={(e) => setBusinessSector(e.target.value)}
+                      >
+                        {BUSINESS_SECTORS.map((sector) => (
+                          <option key={sector} value={sector}>
+                            {sector}
+                          </option>
+                        ))}
+                      </Select>
+                    )}
+                  </Field>
+
+                  <Field label="Trade sub-sector" required error={errors.businessSubSector}>
+                    {(p) => (
+                      <Input
+                        {...p}
+                        value={businessSubSector}
+                        onChange={(e) => setBusinessSubSector(e.target.value)}
+                        placeholder="e.g. Retail sale of electronics"
+                      />
+                    )}
+                  </Field>
+
+                  <Field
+                    label="Approved trade activity"
+                    required
+                    error={errors.businessActivity}
+                    className="sm:col-span-2"
+                  >
+                    {(p) => (
+                      <Textarea
+                        {...p}
+                        rows={4}
+                        value={businessActivity}
+                        onChange={(e) => setBusinessActivity(e.target.value)}
+                        placeholder="Describe the goods traded or services offered, and how the business operates from the registered premises."
+                      />
+                    )}
+                  </Field>
+                </div>
+              </FormSection>
+
+              <FormSection icon={<MapPin className="h-4 w-4" />} title="Trading premises">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Region / city administration" required>
+                    {(p) => (
+                      <Select {...p} value={region} onChange={(e) => setRegion(e.target.value)}>
+                        {ETHIOPIAN_REGIONS.map((r) => (
+                          <option key={r} value={r}>
+                            {r}
+                          </option>
+                        ))}
+                      </Select>
+                    )}
+                  </Field>
+
+                  <Field label="Sub-city / town" required error={errors.subCity}>
+                    {(p) => (
+                      <Input
+                        {...p}
+                        value={subCity}
+                        onChange={(e) => setSubCity(e.target.value)}
+                        placeholder="e.g. Bole"
+                      />
+                    )}
+                  </Field>
+
+                  <Field label="Woreda" required error={errors.woreda}>
+                    {(p) => (
+                      <Input
+                        {...p}
+                        mono
+                        value={woreda}
+                        onChange={(e) => setWoreda(e.target.value)}
+                        placeholder="04"
+                      />
+                    )}
+                  </Field>
+
+                  <Field label="House / premises number" hint="Optional">
+                    {(p) => (
+                      <Input
+                        {...p}
+                        mono
+                        required={false}
+                        value={houseNumber}
+                        onChange={(e) => setHouseNumber(e.target.value)}
+                        placeholder="B-1140"
+                      />
+                    )}
+                  </Field>
+
+                  <Field label="Premises tenure" required>
+                    {(p) => (
+                      <Select
+                        {...p}
+                        value={premisesType}
+                        onChange={(e) => setPremisesType(e.target.value as PremisesType)}
+                      >
+                        {PREMISES_TYPES.map((type) => (
+                          <option key={type} value={type}>
+                            {type}
+                          </option>
+                        ))}
+                      </Select>
+                    )}
+                  </Field>
+                </div>
+              </FormSection>
+
+              <FormSection icon={<Building2 className="h-4 w-4" />} title="Capital and operations">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Registered capital (ETB)" required error={errors.capital}>
+                    {(p) => (
+                      <Input
+                        {...p}
+                        mono
+                        type="number"
+                        min={0}
+                        value={capital}
+                        onChange={(e) => setCapital(Number(e.target.value))}
+                        placeholder="1500000"
+                      />
+                    )}
+                  </Field>
+
+                  <Field label="Number of employees" required>
+                    {(p) => (
+                      <Input
+                        {...p}
+                        mono
+                        type="number"
+                        min={0}
+                        value={employeeCount}
+                        onChange={(e) => setEmployeeCount(Number(e.target.value))}
+                        placeholder="8"
+                      />
+                    )}
+                  </Field>
+
+                  <Field label="Planned commencement date" required>
+                    {(p) => (
+                      <Input
+                        {...p}
+                        type="date"
+                        value={commencementDate}
+                        onChange={(e) => setCommencementDate(e.target.value)}
+                      />
+                    )}
+                  </Field>
+
+                  <Field label="Licence term" required hint="Renewable annually">
+                    {(p) => (
+                      <Select
+                        {...p}
+                        value={licenseTermYears}
+                        onChange={(e) => setLicenseTermYears(Number(e.target.value))}
+                      >
+                        <option value={1}>1 year (standard renewal)</option>
+                        <option value={2}>2 years</option>
+                        <option value={3}>3 years</option>
+                      </Select>
+                    )}
+                  </Field>
+                </div>
+              </FormSection>
+            </div>
+          )}
+
+          {/* STEP 3 — DOCUMENTS */}
+          {formStep === 3 && (
+            <div className="animate-fade-in space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-[15px] font-semibold text-slate-900">
+                    Supporting documents
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Regulations require these five certified documents.
+                  </p>
+                </div>
+                <Badge tone="approved" icon={<CheckCircle2 className="h-3.5 w-3.5" />}>
+                  {uploadedDocs.length} of {uploadedDocs.length} attached
+                </Badge>
+              </div>
+
+              <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200">
+                {uploadedDocs.map((doc, index) => (
+                  <li
+                    key={doc.id}
+                    className="flex items-center justify-between gap-4 bg-white px-4 py-3.5"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className="numeric flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-navy-50 text-sm font-semibold text-navy-700">
+                        {index + 1}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-medium text-slate-900">
+                          {doc.title}
+                        </span>
+                        <span className="mt-0.5 flex items-center gap-2 text-xs text-slate-500">
+                          <Paperclip className="h-3 w-3 shrink-0" aria-hidden="true" />
+                          <span className="truncate font-mono">{doc.fileName}</span>
+                          <span aria-hidden="true">·</span>
+                          <span className="shrink-0">{doc.fileSize}</span>
+                        </span>
+                      </span>
+                    </div>
+
+                    <Badge tone="approved" icon={<CheckCircle2 className="h-3.5 w-3.5" />}>
+                      Attached
+                    </Badge>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* STEP 4 — REVIEW */}
+          {formStep === 4 && (
+            <div className="animate-fade-in space-y-6">
+              <FormSection
+                icon={<ShieldCheck className="h-4 w-4" />}
+                title="Check your answers"
+              >
+                <dl className="grid gap-5 rounded-xl border border-slate-200 bg-slate-50/70 p-5 sm:grid-cols-2">
+                  <DataPoint label="Owner" value={fullName} />
+                  <DataPoint label={idType} value={idNumber} mono />
+                  <DataPoint label="Trade name" value={tradeName} />
+                  <DataPoint label="Business type" value={businessType} />
+                  <DataPoint label="TIN" value={tinNumber} mono />
+                  <DataPoint label="Sector" value={businessSector} />
+                  <DataPoint
+                    label="Premises"
+                    value={`${subCity}, Woreda ${woreda}${houseNumber ? `, ${houseNumber}` : ''} · ${region}`}
+                  />
+                  <DataPoint
+                    label="Capital & term"
+                    value={`${Number(capital).toLocaleString()} ${capitalCurrency} · ${licenseTermYears} year licence`}
+                  />
+                </dl>
+
+                <button
+                  type="button"
+                  onClick={() => goToStep(1)}
+                  className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-navy-700 underline decoration-navy-300 underline-offset-2 transition-colors hover:text-navy-900 cursor-pointer"
+                >
+                  Something wrong? Go back and edit
+                </button>
+              </FormSection>
+
+              <div className="rounded-xl border border-slate-200 bg-white p-5">
+                <Checkbox
+                  checked={declarationAccepted}
+                  onChange={(e) => setDeclarationAccepted(e.target.checked)}
+                  error={errors.declaration}
+                >
+                  <strong className="font-semibold text-slate-900">
+                    Applicant declaration and consent.
+                  </strong>{' '}
+                  I certify that the information in this application and all accompanying
+                  documents is true, complete and authentic. I authorize the Trade Registration
+                  &amp; Business Licensing Directorate to verify these records with the Ministry of
+                  Revenues, the commercial register and the relevant regional trade bureau.
+                </Checkbox>
+              </div>
+            </div>
+          )}
+
+          {/* Submits via the footer button; present so Enter is handled correctly. */}
+          <button type="submit" className="hidden" aria-hidden="true" tabIndex={-1} />
+        </form>
+      </Modal>
+    </div>
+  );
+};
+
+/* -------------------------------------------------------------------------- */
+
+const FormSection: React.FC<{
+  icon: React.ReactNode;
+  title: string;
+  children: React.ReactNode;
+}> = ({ icon, title, children }) => (
+  <fieldset>
+    <legend className="mb-4 flex w-full items-center gap-2 border-b border-slate-200 pb-2.5 text-sm font-semibold uppercase tracking-wider text-slate-700">
+      <span className="text-navy-600" aria-hidden="true">
+        {icon}
+      </span>
+      {title}
+    </legend>
+    {children}
+  </fieldset>
+);
+
+/* -------------------------------------------------------------------------- */
+
+interface ApplicationCardProps {
+  app: TradingLicenseApplication;
+  onOpenLicense: (app: TradingLicenseApplication) => void;
+}
+
+/** Maps a status onto the three-stage lifecycle track. */
+function lifecycleProgress(app: TradingLicenseApplication) {
+  const steps: StepDef[] = [
+    { id: 1, label: 'Submitted', meta: app.submittedAt.split(' ')[0] },
+    {
+      id: 2,
+      label: 'Officer review',
+      meta: app.assignedOfficerName ?? 'Awaiting assignment',
+    },
+    {
+      id: 3,
+      label: 'Decision',
+      meta:
+        app.status === 'Approved'
+          ? 'Approved and issued'
+          : app.status === 'Rejected'
+            ? 'Not approved'
+            : 'Pending',
+    },
+  ];
+
+  if (app.status === 'Approved') return { steps, current: 4, failedAt: undefined };
+  if (app.status === 'Rejected') return { steps, current: 3, failedAt: 3 };
+  return { steps, current: 2, failedAt: undefined };
+}
+
+const ApplicationCard: React.FC<ApplicationCardProps> = ({ app, onOpenLicense }) => {
+  const { steps, current, failedAt } = lifecycleProgress(app);
+
+  return (
+    <Card>
+      {/* Identity row */}
+      <div className="flex flex-col gap-4 border-b border-slate-100 px-6 py-5 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <Badge tone="navy" shape="tag" mono>
+              {app.referenceNumber}
+            </Badge>
+            <span className="text-sm text-slate-500">Submitted {app.submittedAt}</span>
+          </div>
+
+          <h3 className="mt-2.5 text-lg font-semibold tracking-tight text-slate-900">
+            {app.tradeName}
+          </h3>
+
+          <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-600">
+            <Building2 className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+            {app.businessSector}
+            <span className="text-slate-300" aria-hidden="true">
+              ·
+            </span>
+            <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+            {app.subCity}, Woreda {app.woreda}
+          </p>
+        </div>
+
+        <div className="flex shrink-0 flex-wrap items-center gap-2.5">
+          <StatusBadge status={app.status} />
+          {app.status === 'Approved' && (
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<Download className="h-3.5 w-3.5" />}
+              onClick={() => onOpenLicense(app)}
+            >
+              View licence
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Lifecycle */}
+      <div className="px-6 py-6">
+        <Eyebrow className="mb-5">Progress</Eyebrow>
+        <Stepper steps={steps} current={current} failedAt={failedAt} />
+      </div>
+
+      {/* Officer remarks */}
+      {app.officerComments && (
+        <div className="border-t border-slate-100 px-6 py-4">
+          <div className="flex gap-3 rounded-lg bg-slate-50 p-4">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-slate-800">
+                Remarks from {app.assignedOfficerName ?? 'the directorate'}
+              </p>
+              <p className="mt-1 text-sm leading-relaxed text-slate-600">
+                {app.officerComments}
+              </p>
+            </div>
           </div>
         </div>
       )}
 
-      {/* ACTIVE & RECENT APPLICATIONS SECTION */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-base font-bold text-slate-900 flex items-center space-x-2">
-            <FileText className="w-4 h-4 text-blue-600" />
-            <span>My Work Permit Applications ({applications.length})</span>
-          </h3>
-          <span className="text-xs text-slate-500 font-medium">
-            Real-time Status Tracking & Automated Permit Issuance
-          </span>
+      {/* Live status hint */}
+      {(app.status === 'Under Review' || app.status === 'Submitted') && (
+        <div className="flex items-center gap-2 border-t border-slate-100 px-6 py-3 text-sm text-slate-500">
+          <StatusDot status={app.status} pulse />
+          {STATUS_META[app.status].hint}
         </div>
-
-        {applications.length === 0 ? (
-          <div className="bg-white border border-slate-200 rounded-xl p-12 text-center text-slate-500 shadow-xs">
-            <FileText className="w-12 h-12 mx-auto mb-3 text-slate-400" />
-            <p className="text-sm font-semibold text-slate-800">No applications submitted yet.</p>
-            <p className="text-xs mt-1 text-slate-500">Click "Apply for New Work Permit" above to start your digital application.</p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {applications.map((app) => (
-              <div
-                key={app.id}
-                className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4 hover:border-slate-300 transition"
-              >
-                
-                {/* Application Header Bar */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
-                  <div>
-                    <div className="flex items-center space-x-2">
-                      <span className="text-xs font-mono font-bold bg-blue-50 text-blue-700 px-2.5 py-1 rounded border border-blue-200">
-                        {app.referenceNumber}
-                      </span>
-                      <span className="text-xs text-slate-500">
-                        Submitted on: {app.submittedAt}
-                      </span>
-                    </div>
-                    <h4 className="text-base font-bold text-slate-900 mt-1">
-                      {app.jobTitle}
-                    </h4>
-                    <p className="text-xs text-slate-600 flex items-center space-x-1.5 mt-0.5">
-                      <Building2 className="w-3.5 h-3.5 text-slate-400" />
-                      <span>{app.employerName}</span>
-                      <span>•</span>
-                      <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                      <span>{app.workLocation}</span>
-                    </p>
-                  </div>
-
-                  {/* Status Badge */}
-                  <div className="flex items-center space-x-2">
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-bold flex items-center space-x-1.5 border ${
-                        app.status === 'Approved'
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                          : app.status === 'Under Review'
-                          ? 'bg-amber-50 text-amber-800 border-amber-200'
-                          : app.status === 'Rejected'
-                          ? 'bg-rose-50 text-rose-700 border-rose-200'
-                          : 'bg-blue-50 text-blue-700 border-blue-200'
-                      }`}
-                    >
-                      {app.status === 'Approved' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />}
-                      {app.status === 'Under Review' && <Clock className="w-3.5 h-3.5 text-amber-600 animate-spin" />}
-                      {app.status === 'Rejected' && <XCircle className="w-3.5 h-3.5 text-rose-600" />}
-                      {app.status === 'Submitted' && <FileText className="w-3.5 h-3.5 text-blue-600" />}
-                      <span>{app.status}</span>
-                    </span>
-
-                    {app.status === 'Approved' && (
-                      <button
-                        onClick={() => onOpenPermit(app)}
-                        className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold flex items-center space-x-1.5 shadow-xs transition cursor-pointer"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                        <span>View / Download Permit</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Progress Stepper (Waterfall Lifecycle) */}
-                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">
-                    Application Lifecycle Progress
-                  </span>
-                  
-                  <div className="grid grid-cols-3 gap-2 text-xs">
-                    
-                    {/* Stage 1: Submitted */}
-                    <div className="flex items-center space-x-2 bg-white p-2 rounded-lg border border-slate-200 shadow-xs">
-                      <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
-                        ✓
-                      </div>
-                      <div>
-                        <div className="font-bold text-slate-800 text-[11px]">1. Submitted</div>
-                        <div className="text-[10px] text-slate-500">{app.submittedAt.split(' ')[0]}</div>
-                      </div>
-                    </div>
-
-                    {/* Stage 2: Under Review */}
-                    <div
-                      className={`flex items-center space-x-2 p-2 rounded-lg border ${
-                        app.status === 'Under Review' || app.status === 'Approved'
-                          ? 'bg-white border-amber-200 text-amber-800 shadow-xs'
-                          : 'bg-white/50 border-slate-200 text-slate-400'
-                      }`}
-                    >
-                      <div
-                        className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${
-                          app.status === 'Under Review' || app.status === 'Approved'
-                            ? 'bg-amber-500 text-white'
-                            : 'bg-slate-200 text-slate-500'
-                        }`}
-                      >
-                        {app.status === 'Approved' ? '✓' : '2'}
-                      </div>
-                      <div>
-                        <div className="font-bold text-[11px]">2. Officer Review</div>
-                        <div className="text-[10px] text-slate-500">
-                          {app.assignedOfficerName || 'Assigned to Officer'}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Stage 3: Official Decision */}
-                    <div
-                      className={`flex items-center space-x-2 p-2 rounded-lg border ${
-                        app.status === 'Approved'
-                          ? 'bg-white border-emerald-200 text-emerald-800 shadow-xs'
-                          : app.status === 'Rejected'
-                          ? 'bg-white border-rose-200 text-rose-800 shadow-xs'
-                          : 'bg-white/50 border-slate-200 text-slate-400'
-                      }`}
-                    >
-                      <div
-                        className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${
-                          app.status === 'Approved'
-                            ? 'bg-emerald-600 text-white'
-                            : app.status === 'Rejected'
-                            ? 'bg-rose-600 text-white'
-                            : 'bg-slate-200 text-slate-500'
-                        }`}
-                      >
-                        {app.status === 'Approved' ? '✓' : app.status === 'Rejected' ? '✕' : '3'}
-                      </div>
-                      <div>
-                        <div className="font-bold text-[11px]">3. Decision</div>
-                        <div className="text-[10px] text-slate-500">
-                          {app.status === 'Approved' ? 'Approved & Issued' : app.status === 'Rejected' ? 'Application Rejected' : 'Pending'}
-                        </div>
-                      </div>
-                    </div>
-
-                  </div>
-                </div>
-
-                {/* Officer Remarks Banner (If Available) */}
-                {app.officerComments && (
-                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs">
-                    <span className="font-bold text-slate-700 text-[11px] block mb-0.5">
-                      Reviewing Officer Remarks ({app.assignedOfficerName || 'Directorate'}):
-                    </span>
-                    <p className="text-slate-600">{app.officerComments}</p>
-                  </div>
-                )}
-
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-    </div>
+      )}
+    </Card>
   );
 };
